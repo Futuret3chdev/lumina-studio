@@ -798,7 +798,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       accentColor: finish.accent,
       metalness: finish.metalness,
       roughness: finish.roughness,
-      params: { ...item.defaults, dress: 0, cutout: 1 },
+      params: { ...item.defaults, dress: 0, cutout: 1, gait: 1, arms: 1.15, stride: 1, tempo: 1, bounce: 1 },
       photoUrl,
       photoSource: photoUrl,
     };

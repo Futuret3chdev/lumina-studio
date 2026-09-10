@@ -1,6 +1,7 @@
 import { ACCENT_SWATCHES, BODY_SWATCHES, CATALOG_BY_ID, ENV_PRESETS } from "@/lib/studio/catalog";
 import { fileToShot } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
+import { applyGait, GAITS } from "@/lib/studio/walk";
 import { OUTFITS, WORLD_SCENES } from "@/lib/studio/world";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -267,6 +268,84 @@ export function Inspector() {
                 step={0.05}
                 onChange={(value) => updatePlace(selected.id, { rotY: value })}
               />
+              <div>
+                <p className="mb-2 text-xs font-medium uppercase tracking-wider text-subtle">
+                  Walk
+                </p>
+                <div className="mb-3 flex flex-wrap gap-1.5">
+                  {GAITS.map((gait, index) => (
+                    <button
+                      key={gait.id}
+                      type="button"
+                      onClick={() =>
+                        updatePlace(selected.id, {
+                          params: applyGait(selected.params, gait),
+                        })
+                      }
+                      className={cn(
+                        "rounded-full px-3 py-1.5 text-xs font-medium",
+                        Math.round(selected.params.gait ?? 1) === index
+                          ? "bg-fg text-bg"
+                          : "bg-elevated text-muted",
+                      )}
+                    >
+                      {gait.label}
+                    </button>
+                  ))}
+                </div>
+                {Math.round(selected.params.gait ?? 1) !== 0 && (
+                  <div className="flex flex-col gap-3">
+                    <Field
+                      label="Arms"
+                      value={selected.params.arms ?? 1}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      onChange={(value) =>
+                        updatePlace(selected.id, {
+                          params: { ...selected.params, arms: value },
+                        })
+                      }
+                    />
+                    <Field
+                      label="Stride"
+                      value={selected.params.stride ?? 1}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      onChange={(value) =>
+                        updatePlace(selected.id, {
+                          params: { ...selected.params, stride: value },
+                        })
+                      }
+                    />
+                    <Field
+                      label="Speed"
+                      value={selected.params.tempo ?? 1}
+                      min={0.4}
+                      max={1.8}
+                      step={0.05}
+                      onChange={(value) =>
+                        updatePlace(selected.id, {
+                          params: { ...selected.params, tempo: value },
+                        })
+                      }
+                    />
+                    <Field
+                      label="Bounce"
+                      value={selected.params.bounce ?? 1}
+                      min={0}
+                      max={2}
+                      step={0.05}
+                      onChange={(value) =>
+                        updatePlace(selected.id, {
+                          params: { ...selected.params, bounce: value },
+                        })
+                      }
+                    />
+                  </div>
+                )}
+              </div>
               <Button
                 type="button"
                 variant="secondary"

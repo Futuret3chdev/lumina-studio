@@ -157,6 +157,132 @@ function fillHoles(keep: Uint8Array, w: number, h: number) {
   return out;
 }
 
+function keepBigComponents(keep: Uint8Array, w: number, h: number, minFrac: number) {
+  const seen = new Int32Array(keep.length);
+  seen.fill(0);
+  let label = 0;
+  const sizes: number[] = [0];
+  const qx = new Int32Array(keep.length);
+  const qy = new Int32Array(keep.length);
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const start = y * w + x;
+      if (!keep[start] || seen[start]) continue;
+      label += 1;
+      let count = 0;
+      let qh = 0;
+      let qt = 0;
+      qx[qt] = x;
+      qy[qt] = y;
+      qt += 1;
+      seen[start] = label;
+      while (qh < qt) {
+        const cx = qx[qh]!;
+        const cy = qy[qh]!;
+        qh += 1;
+        count += 1;
+        const nbs: [number, number][] = [
+          [cx - 1, cy],
+          [cx + 1, cy],
+          [cx, cy - 1],
+          [cx, cy + 1],
+        ];
+        for (const [nx, ny] of nbs) {
+          if (nx < 0 || ny < 0 || nx >= w || ny >= h) continue;
+          const p = ny * w + nx;
+          if (!keep[p] || seen[p]) continue;
+          seen[p] = label;
+          qx[qt] = nx;
+          qy[qt] = ny;
+          qt += 1;
+        }
+      }
+      sizes[label] = count;
+    }
+  }
+  let best = 0;
+  for (let i = 1; i < sizes.length; i += 1) {
+    if ((sizes[i] ?? 0) > best) best = sizes[i] ?? 0;
+  }
+  const floor = Math.max(40, Math.round(best * minFrac));
+  const out = new Uint8Array(keep.length);
+  for (let i = 0; i < keep.length; i += 1) {
+    const lab = seen[i] ?? 0;
+    if (lab && (sizes[lab] ?? 0) >= floor) out[i] = 1;
+  }
+  return out;
+}
+
+/** Knock off halo, specks, and leftover paper after a lift or auto cut. */
+export function cleanDebris(canvas: HTMLCanvasElement, aggressive = false) {
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) return canvas;
+  const w = canvas.width;
+  const h = canvas.height;
+  const image = ctx.getImageData(0, 0, w, h);
+  const d = image.data;
+  const keep = new Uint8Array(w * h);
+  const alphaCut = aggressive ? 78 : 52;
+  for (let i = 0; i < w * h; i += 1) {
+    const a = d[i * 4 + 3] ?? 0;
+    if (a < alphaCut) {
+      d[i * 4 + 3] = 0;
+      keep[i] = 0;
+    } else {
+      keep[i] = 1;
+    }
+  }
+  for (let pass = 0; pass < 2; pass += 1) {
+    const next = keep.slice();
+    for (let y = 1; y < h - 1; y += 1) {
+      for (let x = 1; x < w - 1; x += 1) {
+        const p = y * w + x;
+        if (!keep[p]) continue;
+        let n = 0;
+        for (let dy = -1; dy <= 1; dy += 1) {
+          for (let dx = -1; dx <= 1; dx += 1) {
+            if (!dx && !dy) continue;
+            n += keep[(y + dy) * w + (x + dx)] ?? 0;
+          }
+        }
+        if (n < 3) next[p] = 0;
+      }
+    }
+    keep.set(next);
+  }
+  const opened = morph(morph(keep, w, h, aggressive ? 2 : 1, false), w, h, aggressive ? 2 : 1, true);
+  const main = keepBigComponents(opened, w, h, aggressive ? 0.12 : 0.07);
+  const edgeAlpha = aggressive ? 190 : 145;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      const p = y * w + x;
+      const i = p * 4;
+      if (!main[p]) {
+        d[i + 3] = 0;
+        continue;
+      }
+      const edge =
+        x === 0 ||
+        y === 0 ||
+        x === w - 1 ||
+        y === h - 1 ||
+        !main[p - 1] ||
+        !main[p + 1] ||
+        !main[p - w] ||
+        !main[p + w];
+      if (!edge) continue;
+      const a = d[i + 3] ?? 0;
+      if (a < edgeAlpha) {
+        d[i + 3] = 0;
+        continue;
+      }
+      d[i + 3] = Math.min(a, aggressive ? 215 : 235);
+    }
+  }
+  ctx.putImageData(image, 0, 0);
+  return canvas;
+}
+
 function cropFromData(d: Uint8ClampedArray, w: number, h: number): PersonCutout | null {
   let minX = w;
   let minY = h;
@@ -407,7 +533,9 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     }
   }
 
-  return cropFromData(d, w, h);
+  const cropped = cropFromData(d, w, h);
+  if (cropped) cleanDebris(cropped.canvas, true);
+  return cropped;
 }
 
 function octxImage(

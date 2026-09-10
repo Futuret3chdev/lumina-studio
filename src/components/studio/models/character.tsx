@@ -4,6 +4,7 @@ import { DoubleSide, SRGBColorSpace, Texture, type Group } from "three";
 import { cutoutPerson } from "@/lib/studio/cutout";
 import { buildPuppet, type PuppetPart, type PuppetRig } from "@/lib/studio/puppet";
 import type { MeshViewProps } from "@/lib/studio/types";
+import { gaitFromParams } from "@/lib/studio/walk";
 import { AvatarMesh } from "./avatar";
 import { n } from "./shared";
 
@@ -135,13 +136,14 @@ function WalkPuppet({
   cut,
   scale,
   height,
+  params,
 }: {
   cut: CutState;
   scale: number;
   height: number;
+  params: Record<string, number>;
 }) {
   const { rig, textures, pet } = cut;
-  if (!rig) return null;
   const root = useRef<Group>(null);
   const hipL = useRef<Group>(null);
   const hipR = useRef<Group>(null);
@@ -150,7 +152,10 @@ function WalkPuppet({
   const armL = useRef<Group>(null);
   const armR = useRef<Group>(null);
   const body = useRef<Group>(null);
+  const head = useRef<Group>(null);
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+  const motion = gaitFromParams(params);
+  if (!rig) return null;
 
   const worldH = (pet ? 0.52 : AVIATOR_H) * height;
   const worldW = worldH * (rig.fullW / Math.max(1, rig.fullH));
@@ -160,35 +165,35 @@ function WalkPuppet({
 
   useFrame((state) => {
     const time = state.clock.elapsedTime + phase;
-    const spd = pet ? 9.2 : 7.1;
-    const s = Math.sin(time * spd);
-    const hipSwing = pet ? 0.38 : 0.72;
-    const kneeBend = pet ? 0.55 : 0.95;
-    const armSwing = pet ? 0.28 : 0.55;
-    if (root.current) {
-      root.current.position.y = Math.abs(Math.sin(time * spd)) * (pet ? 0.025 : 0.04);
-    }
+    const spd = motion.speed;
+    const s = spd <= 0.05 ? 0 : Math.sin(time * spd);
+    const c = spd <= 0.05 ? 0 : Math.cos(time * spd);
+    const step = spd <= 0.05 ? 0 : Math.abs(Math.sin(time * spd));
+    if (root.current) root.current.position.y = step * motion.bob;
     if (body.current) {
-      body.current.rotation.y = s * 0.05;
-      body.current.rotation.z = s * 0.02;
+      body.current.rotation.y = s * motion.sway;
+      body.current.rotation.z = c * motion.sway * 0.35;
     }
+    if (head.current) head.current.rotation.x = step * 0.08;
     if (hipL.current) {
-      hipL.current.rotation.x = s * hipSwing;
-      hipL.current.rotation.z = 0.06 + s * 0.04;
+      hipL.current.rotation.x = s * motion.stride;
+      hipL.current.position.z = s * 0.04;
     }
     if (hipR.current) {
-      hipR.current.rotation.x = -s * hipSwing;
-      hipR.current.rotation.z = -0.06 - s * 0.04;
+      hipR.current.rotation.x = -s * motion.stride;
+      hipR.current.position.z = -s * 0.04;
     }
-    if (kneeL.current) kneeL.current.rotation.x = Math.max(0, -s) * kneeBend;
-    if (kneeR.current) kneeR.current.rotation.x = Math.max(0, s) * kneeBend;
+    if (kneeL.current) kneeL.current.rotation.x = Math.max(0, -s) * motion.stride * 1.15;
+    if (kneeR.current) kneeR.current.rotation.x = Math.max(0, s) * motion.stride * 1.15;
     if (armL.current) {
-      armL.current.rotation.x = -s * armSwing;
-      armL.current.rotation.z = 0.16;
+      armL.current.rotation.x = -s * motion.arms;
+      armL.current.rotation.z = 0.12 + c * 0.18;
+      armL.current.position.z = -s * 0.06;
     }
     if (armR.current) {
-      armR.current.rotation.x = s * armSwing;
-      armR.current.rotation.z = -0.16;
+      armR.current.rotation.x = s * motion.arms;
+      armR.current.rotation.z = -0.12 - c * 0.18;
+      armR.current.position.z = s * 0.06;
     }
   });
 
@@ -205,7 +210,7 @@ function WalkPuppet({
             worldH={worldH}
           />
         </group>
-        <group position={[toX(rig.neck.x), toY(rig.neck.y), 0.01]}>
+        <group ref={head} position={[toX(rig.neck.x), toY(rig.neck.y), 0.01]}>
           <Limb
             piece={rig.head}
             tex={t(rig.head)}
@@ -294,25 +299,29 @@ function SimpleWalker({
   scale,
   height,
   pet,
+  params,
 }: {
   texture: Texture;
   aspect: number;
   scale: number;
   height: number;
   pet: boolean;
+  params: Record<string, number>;
 }) {
   const ref = useRef<Group>(null);
   const h = (pet ? 0.55 : AVIATOR_H) * height;
   const w = Math.min(h * (pet ? 1.1 : 0.72), h * aspect);
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+  const motion = gaitFromParams(params);
   useFrame((state) => {
     const g = ref.current;
     if (!g) return;
     const t = state.clock.elapsedTime + phase;
-    const spd = pet ? 9.2 : 7.1;
-    const s = Math.sin(t * spd);
-    g.position.y = Math.abs(s) * (pet ? 0.03 : 0.04);
-    g.rotation.y = s * 0.08;
+    const spd = motion.speed || (pet ? 8 : 0);
+    const s = spd <= 0.05 ? 0 : Math.sin(t * spd);
+    g.position.y = Math.abs(s) * Math.max(motion.bob, pet ? 0.03 : 0);
+    g.rotation.y = s * motion.sway;
+    g.rotation.z = s * motion.arms * 0.08;
   });
   return (
     <group ref={ref} scale={scale}>
@@ -339,9 +348,19 @@ function SimpleWalker({
 export function PersonMesh(props: MeshViewProps) {
   const cut = usePuppet(props.photoUrl);
   const height = n(props.params, "height", 1);
-  const forceCut = n(props.params, "cutout", 0) > 0.5;
 
-  if (cut && (cut.pet || !cut.rig || (forceCut && !cut.fullBody))) {
+  if (cut?.rig) {
+    return (
+      <WalkPuppet
+        cut={cut}
+        scale={props.scale}
+        height={height}
+        params={props.params}
+      />
+    );
+  }
+
+  if (cut) {
     return (
       <SimpleWalker
         texture={cut.full}
@@ -349,12 +368,9 @@ export function PersonMesh(props: MeshViewProps) {
         scale={props.scale}
         height={height}
         pet={cut.pet}
+        params={props.params}
       />
     );
-  }
-
-  if (cut?.fullBody && cut.rig) {
-    return <WalkPuppet cut={cut} scale={props.scale} height={height} />;
   }
 
   return <AvatarMesh {...props} />;

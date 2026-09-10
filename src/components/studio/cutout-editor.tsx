@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, ImagePlus, Paintbrush, RotateCcw, Sparkles, Undo2, X } from "lucide-react";
+import { Eraser, Paintbrush, RotateCcw, Sparkles, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { fileToShot } from "@/lib/studio/photo";
-import { cutoutPerson } from "@/lib/studio/cutout";
+import { cleanDebris, cutoutPerson } from "@/lib/studio/cutout";
 import { liftSubject, preloadLift } from "@/lib/studio/lift-subject";
 import { useStudio } from "@/lib/studio/store";
 
@@ -133,8 +133,9 @@ export function CutoutEditor() {
       const ox = Math.round((work.width - cut.width) / 2);
       const oy = Math.round((work.height - cut.height) / 2);
       ctx.drawImage(cut, ox, oy);
+      cleanDebris(work, true);
       lifted.current = true;
-      toast.success("That's them — tidy the edge if you need");
+      toast.success("Subject lifted — crumbs wiped");
     } catch {
       toast.error("Could not lift that subject here — paint the backdrop instead");
     } finally {
@@ -364,6 +365,8 @@ export function CutoutEditor() {
     } else {
       ctx.drawImage(orig, 0, 0);
     }
+    cleanDebris(work, true);
+    lifted.current = true;
   }
 
   async function onReplace(file: File) {
@@ -377,9 +380,18 @@ export function CutoutEditor() {
     }
   }
 
+  function onClean() {
+    const work = workRef.current;
+    if (!work) return;
+    snapshot();
+    cleanDebris(work, true);
+    lifted.current = true;
+  }
+
   function onDone() {
     const work = workRef.current;
     if (!work || !place) return;
+    cleanDebris(work, true);
     const url = work.toDataURL("image/png");
     useStudio.getState().applyCutout(place.id, url);
     toast.success("Cut-out saved on this picture only");
@@ -457,8 +469,10 @@ export function CutoutEditor() {
         </div>
         <div className="flex gap-2">
           <Button type="button" variant="ghost" className="flex-1" onClick={onAuto}>
-            <Sparkles className="size-4" />
             Auto
+          </Button>
+          <Button type="button" variant="ghost" className="flex-1" onClick={onClean}>
+            Wipe crumbs
           </Button>
           <Button
             type="button"
@@ -466,7 +480,6 @@ export function CutoutEditor() {
             className="flex-1"
             onClick={() => fileRef.current?.click()}
           >
-            <ImagePlus className="size-4" />
             New photo
           </Button>
           <input
