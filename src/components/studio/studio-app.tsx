@@ -14,7 +14,10 @@ export function StudioApp() {
   const loadGallery = useStudio((s) => s.loadGallery);
   const randomizeItem = useStudio((s) => s.randomizeItem);
   const galleryOpen = useStudio((s) => s.galleryOpen);
+  const selectedPlaceId = useStudio((s) => s.selectedPlaceId);
+  const worldPlaces = useStudio((s) => s.worldPlaces);
   const [sheet, setSheet] = useState<"inspector" | null>(null);
+  const selected = worldPlaces.find((p) => p.id === selectedPlaceId);
 
   useEffect(() => {
     loadGallery();
@@ -75,7 +78,7 @@ export function StudioApp() {
               }}
             >
               <SlidersHorizontal className="size-4" />
-              Adjust
+              {selected?.photoUrl ? "This picture" : "Adjust"}
             </Button>
             <Button type="button" variant="ghost" className="flex-1" onClick={randomizeItem}>
               Surprise me
@@ -99,7 +102,9 @@ export function StudioApp() {
         <div className="absolute inset-0 z-30 flex items-end bg-bg/60 lg:hidden">
           <div className="flex h-[80dvh] w-full flex-col rounded-t-xl bg-surface shadow-[var(--shadow-border)]">
             <div className="flex items-center justify-between px-3 py-2">
-              <p className="text-sm font-medium">Adjust</p>
+              <p className="text-sm font-medium">
+                {selected?.photoUrl ? "This picture" : "Adjust"}
+              </p>
               <Button
                 type="button"
                 variant="ghost"

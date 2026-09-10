@@ -47,6 +47,21 @@ function writeGallery(items: SavedAsset[]) {
   }
 }
 
+function migratePlace(place: WorldPlace): WorldPlace {
+  if (place.kind === "photo-relief" && place.photoUrl) {
+    return {
+      ...place,
+      kind: "avatar",
+      params: { height: 1, build: 1, dress: 0, cutout: 1 },
+      scale: 1,
+    };
+  }
+  if (place.kind === "avatar" && place.photoUrl && (place.params.cutout ?? 0) < 0.5) {
+    return { ...place, params: { ...place.params, cutout: 1 } };
+  }
+  return place;
+}
+
 function readWorld(): { scene: WorldSceneId; places: WorldPlace[] } {
   if (typeof window === "undefined") return { scene: "house", places: [] };
   try {
@@ -57,7 +72,10 @@ function readWorld(): { scene: WorldSceneId; places: WorldPlace[] } {
       parsed.scene === "lot" || parsed.scene === "garden" || parsed.scene === "house"
         ? parsed.scene
         : "house";
-    return { scene, places: Array.isArray(parsed.places) ? parsed.places : [] };
+    return {
+      scene,
+      places: Array.isArray(parsed.places) ? parsed.places.map(migratePlace) : [],
+    };
   } catch {
     return { scene: "house", places: [] };
   }
@@ -73,6 +91,9 @@ function writeWorld(scene: WorldSceneId, places: WorldPlace[]) {
 }
 
 const savedWorld = readWorld();
+if (typeof window !== "undefined") {
+  writeWorld(savedWorld.scene, savedWorld.places);
+}
 
 export type PhotoImportMode = "sculpt" | "wrap" | "avatar";
 
@@ -140,6 +161,7 @@ export type StudioState = {
   selectPlace: (id: string | null) => void;
   movePlace: (id: string, x: number, z: number) => void;
   updatePlace: (id: string, patch: Partial<WorldPlace>) => void;
+  convertToPerson: (id: string) => void;
   removePlace: (id: string) => void;
 };
 
@@ -860,6 +882,31 @@ export const useStudio = create<StudioState>((set, get) => ({
         scale: place.scale,
       });
     }
+  },
+  convertToPerson: (id) => {
+    const state = get();
+    const target = state.worldPlaces.find((p) => p.id === id);
+    if (!target?.photoUrl) return;
+    const worldPlaces = state.worldPlaces.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            kind: "avatar" as const,
+            params: { height: p.params.height ?? 1, build: 1, dress: 0, cutout: 1 },
+            scale: p.kind === "photo-relief" ? 1 : p.scale,
+          }
+        : p,
+    );
+    writeWorld(state.worldScene, worldPlaces);
+    const place = worldPlaces.find((p) => p.id === id)!;
+    set({
+      worldPlaces,
+      selectedPlaceId: id,
+      kind: "avatar",
+      category: "people",
+      params: place.params,
+      scale: place.scale,
+    });
   },
   removePlace: (id) => {
     const worldPlaces = get().worldPlaces.filter((p) => p.id !== id);

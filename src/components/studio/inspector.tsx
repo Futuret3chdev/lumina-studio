@@ -146,30 +146,100 @@ export function Inspector() {
   const worldPlaces = useStudio((s) => s.worldPlaces);
   const updatePlace = useStudio((s) => s.updatePlace);
   const removePlace = useStudio((s) => s.removePlace);
+  const convertToPerson = useStudio((s) => s.convertToPerson);
   const item = CATALOG_BY_ID[kind];
   const hasPhoto = Boolean(activePhotoId);
   const isPhoto = kind === "photo-relief";
   const isAvatar = kind === "avatar";
   const selected = worldPlaces.find((p) => p.id === selectedPlaceId);
   const dress = Math.round(params.dress ?? 0);
+  const picture = Boolean(selected?.photoUrl);
+  const mannequin = isAvatar && !picture;
 
   return (
     <aside className="pointer-events-auto flex h-full w-full flex-col bg-surface lg:w-72 lg:rounded-xl lg:shadow-[var(--shadow-border)]">
       <div className="px-4 py-3">
         <p className="font-display text-xl leading-tight">
-          {mode === "world" ? selected?.name ?? "MT World" : item.name}
+          {mode === "world"
+            ? selected
+              ? picture
+                ? "This picture"
+                : selected.name
+              : "MT World"
+            : item.name}
         </p>
         <p className="mt-1 text-sm text-muted">
           {mode === "world"
             ? selected
-              ? "Tap the floor to move it. Dress yourself, drop models, make it home."
-              : "Empty world. Me · Aviator uses your selfie. Tap any model or Upload 3D to drop it in."
+              ? picture
+                ? "Edits apply only to this one — not the garden."
+                : "Tap the floor to move it."
+              : "Tap a person or model to edit just that one."
             : item.blurb}
         </p>
       </div>
       <Separator />
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 px-4 py-4">
+          {mode === "world" && selected && picture && (
+            <div className="flex flex-col gap-3">
+              <div className="overflow-hidden rounded-lg bg-elevated">
+                <img
+                  src={selected.photoUrl}
+                  alt=""
+                  className="mx-auto max-h-36 object-contain"
+                  crossOrigin="anonymous"
+                />
+              </div>
+              <p className="text-sm text-fg">{selected.name}</p>
+              {selected.kind === "photo-relief" && (
+                <Button
+                  type="button"
+                  className="w-full"
+                  onClick={() => convertToPerson(selected.id)}
+                >
+                  Cut out background
+                </Button>
+              )}
+              <Field
+                label="Height"
+                value={selected.params.height ?? 1}
+                min={0.35}
+                max={1.6}
+                step={0.05}
+                onChange={(value) =>
+                  updatePlace(selected.id, {
+                    params: { ...selected.params, height: value },
+                  })
+                }
+              />
+              <Field
+                label="Size"
+                value={selected.scale}
+                min={0.4}
+                max={2.2}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { scale: value })}
+              />
+              <Field
+                label="Turn"
+                value={selected.rotY}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { rotY: value })}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => removePlace(selected.id)}
+              >
+                Remove this picture
+              </Button>
+              <Separator />
+            </div>
+          )}
           {mode === "world" && (
             <div>
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
@@ -194,7 +264,7 @@ export function Inspector() {
               </div>
             </div>
           )}
-          {(isAvatar || selected?.kind === "avatar") && (
+          {mannequin && (
             <div>
               <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
                 Dress
@@ -226,7 +296,7 @@ export function Inspector() {
               </div>
             </div>
           )}
-          {mode === "world" && selected && (
+          {mode === "world" && selected && !picture && (
             <div className="flex flex-col gap-3">
               <Field
                 label="Turn"
@@ -235,6 +305,14 @@ export function Inspector() {
                 max={Math.PI}
                 step={0.05}
                 onChange={(value) => updatePlace(selected.id, { rotY: value })}
+              />
+              <Field
+                label="Size"
+                value={selected.scale}
+                min={0.4}
+                max={2.2}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { scale: value })}
               />
               <Button
                 type="button"
@@ -246,14 +324,14 @@ export function Inspector() {
               </Button>
             </div>
           )}
-          {hasPhoto && (
+          {hasPhoto && mode !== "world" && (
             <ToggleRow
               label="Wrap onto model"
               checked={wrapPhoto && !isPhoto}
               onCheckedChange={setWrapPhoto}
             />
           )}
-          {!isPhoto && (
+          {mode !== "world" && !isPhoto && (
             <Swatches
               label="Surface"
               value={bodyColor}
@@ -261,61 +339,70 @@ export function Inspector() {
               onChange={setBodyColor}
             />
           )}
-          <Swatches
-            label={isPhoto ? "Frame" : "Accent"}
-            value={accentColor}
-            colors={ACCENT_SWATCHES}
-            onChange={setAccentColor}
-          />
-          <Field
-            label="Metalness"
-            value={metalness}
-            min={0}
-            max={1}
-            step={0.05}
-            onChange={setMetalness}
-          />
-          <Field
-            label="Roughness"
-            value={roughness}
-            min={0}
-            max={1}
-            step={0.05}
-            onChange={setRoughness}
-          />
-          <Field
-            label="Scale"
-            value={scale}
-            min={0.5}
-            max={1.8}
-            step={0.05}
-            onChange={setScale}
-          />
+          {mode !== "world" && (
+            <>
+              <Swatches
+                label={isPhoto ? "Frame" : "Accent"}
+                value={accentColor}
+                colors={ACCENT_SWATCHES}
+                onChange={setAccentColor}
+              />
+              <Field
+                label="Metalness"
+                value={metalness}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={setMetalness}
+              />
+              <Field
+                label="Roughness"
+                value={roughness}
+                min={0}
+                max={1}
+                step={0.05}
+                onChange={setRoughness}
+              />
+              <Field
+                label="Scale"
+                value={scale}
+                min={0.5}
+                max={1.8}
+                step={0.05}
+                onChange={setScale}
+              />
+              <Separator />
+              <div>
+                <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
+                  Shape
+                </p>
+                <div className="flex flex-col gap-3">
+                  {item.params
+                    .filter((field) => !(isAvatar && field.key === "dress"))
+                    .map((field) => (
+                      <Field
+                        key={field.key}
+                        label={field.label}
+                        value={params[field.key] ?? field.min}
+                        min={field.min}
+                        max={field.max}
+                        step={field.step}
+                        onChange={(value) => setParam(field.key, value)}
+                      />
+                    ))}
+                </div>
+              </div>
+            </>
+          )}
           <Separator />
           <div>
             <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
-              Shape
+              {mode === "world" ? "Whole garden" : "Stage"}
             </p>
-            <div className="flex flex-col gap-3">
-              {item.params
-                .filter((field) => !(isAvatar && field.key === "dress"))
-                .map((field) => (
-                <Field
-                  key={field.key}
-                  label={field.label}
-                  value={params[field.key] ?? field.min}
-                  min={field.min}
-                  max={field.max}
-                  step={field.step}
-                  onChange={(value) => setParam(field.key, value)}
-                />
-              ))}
-            </div>
-          </div>
-          <Separator />
-          <div>
-            <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
-              Stage
+            <p className="mb-3 text-xs text-muted">
+              {mode === "world"
+                ? "Lighting for the house and garden. Does not change a picture’s background."
+                : "Studio lighting and backdrop."}
             </p>
             <div className="mb-3 grid grid-cols-2 gap-1.5">
               {ENV_PRESETS.map((preset) => (
@@ -342,16 +429,20 @@ export function Inspector() {
               step={0.05}
               onChange={setLightIntensity}
             />
-            <ToggleRow
-              label="Environment backdrop"
-              checked={envBackground}
-              onCheckedChange={setEnvBackground}
-            />
-            <ToggleRow
-              label="Turntable disc"
-              checked={showPlatform}
-              onCheckedChange={setShowPlatform}
-            />
+            {mode !== "world" && (
+              <>
+                <ToggleRow
+                  label="Environment backdrop"
+                  checked={envBackground}
+                  onCheckedChange={setEnvBackground}
+                />
+                <ToggleRow
+                  label="Turntable disc"
+                  checked={showPlatform}
+                  onCheckedChange={setShowPlatform}
+                />
+              </>
+            )}
             <ToggleRow
               label="Ground grid"
               checked={showGrid}

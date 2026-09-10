@@ -353,6 +353,8 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
   }
   if (solid < 80 || maxX <= minX || maxY <= minY) return null;
 
+  ctx.putImageData(image, 0, 0);
+
   const pad = 3;
   minX = Math.max(0, minX - pad);
   minY = Math.max(0, minY - pad);
@@ -360,7 +362,7 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
   maxY = Math.min(h - 1, maxY + pad);
   const cw = maxX - minX + 1;
   const ch = maxY - minY + 1;
-  const crop = ctx.getImageData(minX, minY, cw, ch);
+  const crop = octxImage(d, w, minX, minY, cw, ch);
   const out = document.createElement("canvas");
   out.width = cw;
   out.height = ch;
@@ -374,4 +376,28 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     pet: ratio < 1.22,
     aspect: cw / Math.max(1, ch),
   };
+}
+
+function octxImage(
+  src: Uint8ClampedArray,
+  srcW: number,
+  x0: number,
+  y0: number,
+  cw: number,
+  ch: number,
+) {
+  const out = new ImageData(cw, ch);
+  const d = out.data;
+  for (let y = 0; y < ch; y += 1) {
+    const sy = y0 + y;
+    for (let x = 0; x < cw; x += 1) {
+      const si = ((sy * srcW + (x0 + x)) * 4) | 0;
+      const di = ((y * cw + x) * 4) | 0;
+      d[di] = src[si] ?? 0;
+      d[di + 1] = src[si + 1] ?? 0;
+      d[di + 2] = src[si + 2] ?? 0;
+      d[di + 3] = src[si + 3] ?? 0;
+    }
+  }
+  return out;
 }

@@ -238,7 +238,9 @@ export function MobileCatalog({ onOpenGallery }: { onOpenGallery?: () => void })
   const worldPlaces = useStudio((s) => s.worldPlaces);
   const placeOrStage = usePlaceOrStage();
   const selected = worldPlaces.find((p) => p.id === selectedPlaceId);
-  const showDress = kind === "avatar" || selected?.kind === "avatar" || mode === "world";
+  const showDress =
+    (kind === "avatar" || selected?.kind === "avatar" || mode === "world") &&
+    !(selected?.photoUrl && (selected?.params.cutout ?? 0) > 0.5);
   const dress = Math.round(params.dress ?? 0);
 
   return (
