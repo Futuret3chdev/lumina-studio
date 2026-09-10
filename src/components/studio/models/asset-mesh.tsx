@@ -1,4 +1,5 @@
 import type { MeshViewProps } from "@/lib/studio/types";
+import { AvatarMesh } from "./avatar";
 import { BuildingMesh } from "./building";
 import { FurnitureMesh } from "./furniture";
 import { NatureMesh } from "./nature";
@@ -12,6 +13,8 @@ export function AssetMesh(props: MeshViewProps) {
   switch (kind) {
     case "photo-relief":
       return <PhotoMesh {...props} />;
+    case "avatar":
+      return <AvatarMesh {...props} />;
     case "sports-car":
     case "sedan":
     case "suv":

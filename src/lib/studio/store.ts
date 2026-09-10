@@ -7,14 +7,19 @@ import {
 } from "./catalog";
 import type { PhotoShot } from "./photo";
 import type {
+  AppMode,
   AssetKind,
   CameraPreset,
   CategoryId,
   EnvPreset,
   SavedAsset,
+  WorldPlace,
+  WorldSceneId,
 } from "./types";
+import { clampToScene, nextSlot, placeScaleFor, uid } from "./world";
 
 const GALLERY_KEY = "lumina.gallery.v1";
+const WORLD_KEY = "lumina.world.v1";
 
 function roundToStep(value: number, step: number) {
   const decimals = String(step).split(".")[1]?.length ?? 0;
@@ -42,7 +47,34 @@ function writeGallery(items: SavedAsset[]) {
   }
 }
 
-export type PhotoImportMode = "sculpt" | "wrap";
+function readWorld(): { scene: WorldSceneId; places: WorldPlace[] } {
+  if (typeof window === "undefined") return { scene: "house", places: [] };
+  try {
+    const raw = localStorage.getItem(WORLD_KEY);
+    if (!raw) return { scene: "house", places: [] };
+    const parsed = JSON.parse(raw) as { scene?: WorldSceneId; places?: WorldPlace[] };
+    const scene =
+      parsed.scene === "lot" || parsed.scene === "garden" || parsed.scene === "house"
+        ? parsed.scene
+        : "house";
+    return { scene, places: Array.isArray(parsed.places) ? parsed.places : [] };
+  } catch {
+    return { scene: "house", places: [] };
+  }
+}
+
+function writeWorld(scene: WorldSceneId, places: WorldPlace[]) {
+  try {
+    const slim = places.map(({ glbUrl: _glb, ...rest }) => rest);
+    localStorage.setItem(WORLD_KEY, JSON.stringify({ scene, places: slim }));
+  } catch {
+    // quota — ignore
+  }
+}
+
+const savedWorld = readWorld();
+
+export type PhotoImportMode = "sculpt" | "wrap" | "avatar";
 
 export type StudioState = {
   kind: AssetKind;
@@ -69,6 +101,10 @@ export type StudioState = {
   previousKind: AssetKind;
   captureOpen: boolean;
   photoBusy: boolean;
+  mode: AppMode;
+  worldScene: WorldSceneId;
+  worldPlaces: WorldPlace[];
+  selectedPlaceId: string | null;
   setKind: (kind: AssetKind) => void;
   setCategory: (category: CategoryId) => void;
   setParam: (key: string, value: number) => void;
@@ -96,6 +132,14 @@ export type StudioState = {
   importShot: (shot: PhotoShot, mode?: PhotoImportMode) => void;
   selectPhoto: (id: string) => void;
   setWrapPhoto: (value: boolean) => void;
+  setMode: (mode: AppMode) => void;
+  setWorldScene: (scene: WorldSceneId) => void;
+  placeKind: (kind: AssetKind, photoUrl?: string) => string;
+  placeUpload: (name: string, glbUrl: string) => string;
+  selectPlace: (id: string | null) => void;
+  movePlace: (id: string, x: number, z: number) => void;
+  updatePlace: (id: string, patch: Partial<WorldPlace>) => void;
+  removePlace: (id: string) => void;
 };
 
 const KIND_FINISH: Partial<
@@ -290,6 +334,12 @@ const KIND_FINISH: Partial<
     metalness: 0.06,
     roughness: 0.68,
   },
+  avatar: {
+    body: "#e7cbb6",
+    accent: "#5c3a2e",
+    metalness: 0.08,
+    roughness: 0.62,
+  },
 };
 
 const initial = CATALOG_BY_ID["sports-car"];
@@ -323,6 +373,10 @@ export const useStudio = create<StudioState>((set, get) => ({
   previousKind: "sports-car",
   captureOpen: false,
   photoBusy: false,
+  mode: "studio",
+  worldScene: savedWorld.scene,
+  worldPlaces: savedWorld.places,
+  selectedPlaceId: null,
   setKind: (kind) => {
     const item = CATALOG_BY_ID[kind];
     const finish = KIND_FINISH[kind];
@@ -344,13 +398,39 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
   },
   setCategory: (category) => set({ category, galleryOpen: false }),
-  setParam: (key, value) =>
-    set({ params: { ...get().params, [key]: value } }),
-  setBodyColor: (bodyColor) => set({ bodyColor }),
-  setAccentColor: (accentColor) => set({ accentColor }),
-  setMetalness: (metalness) => set({ metalness }),
-  setRoughness: (roughness) => set({ roughness }),
-  setScale: (scale) => set({ scale }),
+  setParam: (key, value) => {
+    const params = { ...get().params, [key]: value };
+    set({ params });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) {
+      get().updatePlace(id, { params });
+    }
+  },
+  setBodyColor: (bodyColor) => {
+    set({ bodyColor });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) get().updatePlace(id, { bodyColor });
+  },
+  setAccentColor: (accentColor) => {
+    set({ accentColor });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) get().updatePlace(id, { accentColor });
+  },
+  setMetalness: (metalness) => {
+    set({ metalness });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) get().updatePlace(id, { metalness });
+  },
+  setRoughness: (roughness) => {
+    set({ roughness });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) get().updatePlace(id, { roughness });
+  },
+  setScale: (scale) => {
+    set({ scale });
+    const id = get().selectedPlaceId;
+    if (get().mode === "world" && id) get().updatePlace(id, { scale });
+  },
   setEnv: (env) => set({ env }),
   setEnvBackground: (envBackground) => set({ envBackground }),
   setAutoRotate: (autoRotate) => set({ autoRotate }),
@@ -381,10 +461,21 @@ export const useStudio = create<StudioState>((set, get) => ({
   randomizeItem: () => {
     const pool = CATALOG.filter((item) => item.id !== "photo-relief");
     const item = pool[Math.floor(Math.random() * pool.length)]!;
+    if (get().mode === "world") {
+      get().placeKind(item.id);
+      return;
+    }
     get().setKind(item.id);
     get().randomizeLook();
   },
-  loadGallery: () => set({ gallery: readGallery() }),
+  loadGallery: () => {
+    const world = readWorld();
+    set({
+      gallery: readGallery(),
+      worldScene: world.scene,
+      worldPlaces: world.places.length ? world.places : get().worldPlaces,
+    });
+  },
   saveCurrent: (thumbnail) => {
     const state = get();
     const item = CATALOG_BY_ID[state.kind];
@@ -453,6 +544,31 @@ export const useStudio = create<StudioState>((set, get) => ({
   importShot: (shot, mode = "sculpt") => {
     const state = get();
     const photos = rememberPhoto(state.photos, shot);
+    if (mode === "avatar") {
+      get().placeKind("avatar", shot.url);
+      set({
+        photos,
+        activePhotoId: shot.id,
+        captureOpen: false,
+        galleryOpen: false,
+        mode: "world",
+        autoRotate: false,
+        showPlatform: false,
+        env: state.worldScene === "house" ? "warehouse" : "forest",
+        cameraTick: state.cameraTick + 1,
+      });
+      return;
+    }
+    if (state.mode === "world") {
+      const id = get().placeKind("photo-relief", shot.url);
+      set({
+        photos,
+        activePhotoId: shot.id,
+        captureOpen: false,
+        selectedPlaceId: id,
+      });
+      return;
+    }
     const canWrap = state.kind !== "photo-relief";
     if (mode === "wrap" && canWrap) {
       set({
@@ -496,6 +612,11 @@ export const useStudio = create<StudioState>((set, get) => ({
   selectPhoto: (id) => {
     const shot = get().photos.find((p) => p.id === id);
     if (!shot) return;
+    if (get().mode === "world") {
+      get().placeKind("photo-relief", shot.url);
+      set({ activePhotoId: id, galleryOpen: false });
+      return;
+    }
     get().setKind("photo-relief");
     set({ activePhotoId: id, wrapPhoto: false, galleryOpen: false });
   },
@@ -512,5 +633,203 @@ export const useStudio = create<StudioState>((set, get) => ({
       return;
     }
     set({ wrapPhoto });
+  },
+  setMode: (mode) => {
+    const env =
+      mode === "world"
+        ? get().worldScene === "house"
+          ? "warehouse"
+          : "forest"
+        : get().env === "warehouse"
+          ? "studio"
+          : get().env;
+    set({
+      mode,
+      autoRotate: mode === "studio",
+      showPlatform: mode === "studio",
+      galleryOpen: false,
+      env,
+      cameraTick: get().cameraTick + 1,
+    });
+  },
+  setWorldScene: (worldScene) => {
+    const worldPlaces = get().worldPlaces;
+    writeWorld(worldScene, worldPlaces);
+    set({
+      worldScene,
+      env: worldScene === "house" ? "warehouse" : "forest",
+      selectedPlaceId: null,
+      cameraTick: get().cameraTick + 1,
+    });
+  },
+  placeKind: (kind, photoUrl) => {
+    const state = get();
+    if (kind === "avatar") {
+      const existing = state.worldPlaces.find((p) => p.kind === "avatar");
+      const item = CATALOG_BY_ID.avatar;
+      const finish = KIND_FINISH.avatar!;
+      if (existing) {
+        const worldPlaces = state.worldPlaces.map((p) =>
+          p.id === existing.id
+            ? {
+                ...p,
+                photoUrl: photoUrl ?? p.photoUrl,
+                params: { ...item.defaults, ...p.params, dress: p.params.dress ?? 0 },
+              }
+            : p,
+        );
+        writeWorld(state.worldScene, worldPlaces);
+        set({
+          worldPlaces,
+          selectedPlaceId: existing.id,
+          mode: "world",
+          kind: "avatar",
+          category: "people",
+          params: { ...item.defaults, ...(existing.params ?? {}), dress: existing.params.dress ?? 0 },
+          bodyColor: existing.bodyColor,
+          accentColor: existing.accentColor,
+        });
+        return existing.id;
+      }
+      const slot = nextSlot(state.worldPlaces, state.worldScene);
+      const place: WorldPlace = {
+        id: uid("me"),
+        kind: "avatar",
+        name: "Aviator",
+        x: slot.x,
+        z: slot.z,
+        rotY: 0,
+        scale: 1,
+        bodyColor: finish.body,
+        accentColor: finish.accent,
+        metalness: finish.metalness,
+        roughness: finish.roughness,
+        params: { ...item.defaults, dress: 0 },
+        photoUrl,
+      };
+      const worldPlaces = [...state.worldPlaces, place];
+      writeWorld(state.worldScene, worldPlaces);
+      set({
+        worldPlaces,
+        selectedPlaceId: place.id,
+        mode: "world",
+        kind: "avatar",
+        category: "people",
+        params: place.params,
+        bodyColor: place.bodyColor,
+        accentColor: place.accentColor,
+        metalness: place.metalness,
+        roughness: place.roughness,
+      });
+      return place.id;
+    }
+    const item = CATALOG_BY_ID[kind];
+    const finish = KIND_FINISH[kind];
+    const slot = nextSlot(state.worldPlaces, state.worldScene);
+    const place: WorldPlace = {
+      id: uid("p"),
+      kind,
+      name: item.name,
+      x: slot.x,
+      z: slot.z,
+      rotY: kind === "photo-relief" ? 0 : 0,
+      scale: placeScaleFor(kind),
+      bodyColor: finish?.body ?? state.bodyColor,
+      accentColor: finish?.accent ?? state.accentColor,
+      metalness: finish?.metalness ?? 0.2,
+      roughness: finish?.roughness ?? 0.55,
+      params: { ...item.defaults },
+      photoUrl,
+    };
+    const worldPlaces = [...state.worldPlaces, place];
+    writeWorld(state.worldScene, worldPlaces);
+    set({
+      worldPlaces,
+      selectedPlaceId: place.id,
+      mode: "world",
+    });
+    return place.id;
+  },
+  placeUpload: (name, glbUrl) => {
+    const state = get();
+    const slot = nextSlot(state.worldPlaces, state.worldScene);
+    const place: WorldPlace = {
+      id: uid("u"),
+      kind: "upload",
+      name,
+      x: slot.x,
+      z: slot.z,
+      rotY: 0,
+      scale: 1,
+      bodyColor: "#a1a1aa",
+      accentColor: "#27272a",
+      metalness: 0.2,
+      roughness: 0.55,
+      params: {},
+      glbUrl,
+    };
+    const worldPlaces = [...state.worldPlaces, place];
+    set({
+      worldPlaces,
+      selectedPlaceId: place.id,
+      mode: "world",
+      autoRotate: false,
+      showPlatform: false,
+    });
+    return place.id;
+  },
+  selectPlace: (selectedPlaceId) => {
+    const place = get().worldPlaces.find((p) => p.id === selectedPlaceId);
+    if (!place || place.kind === "upload") {
+      set({ selectedPlaceId });
+      return;
+    }
+    const item = CATALOG_BY_ID[place.kind];
+    set({
+      selectedPlaceId,
+      kind: place.kind,
+      category: item.category,
+      params: { ...place.params },
+      bodyColor: place.bodyColor,
+      accentColor: place.accentColor,
+      metalness: place.metalness,
+      roughness: place.roughness,
+      scale: place.scale,
+    });
+  },
+  movePlace: (id, x, z) => {
+    const scene = get().worldScene;
+    const clamped = clampToScene(x, z, scene);
+    const worldPlaces = get().worldPlaces.map((p) =>
+      p.id === id ? { ...p, x: clamped.x, z: clamped.z } : p,
+    );
+    writeWorld(scene, worldPlaces);
+    set({ worldPlaces, selectedPlaceId: id });
+  },
+  updatePlace: (id, patch) => {
+    const worldPlaces = get().worldPlaces.map((p) =>
+      p.id === id ? { ...p, ...patch } : p,
+    );
+    writeWorld(get().worldScene, worldPlaces);
+    set({ worldPlaces });
+    const place = worldPlaces.find((p) => p.id === id);
+    if (place && place.kind !== "upload" && get().selectedPlaceId === id) {
+      set({
+        params: { ...place.params },
+        bodyColor: place.bodyColor,
+        accentColor: place.accentColor,
+        metalness: place.metalness,
+        roughness: place.roughness,
+        scale: place.scale,
+      });
+    }
+  },
+  removePlace: (id) => {
+    const worldPlaces = get().worldPlaces.filter((p) => p.id !== id);
+    writeWorld(get().worldScene, worldPlaces);
+    set({
+      worldPlaces,
+      selectedPlaceId: get().selectedPlaceId === id ? null : get().selectedPlaceId,
+    });
   },
 }));

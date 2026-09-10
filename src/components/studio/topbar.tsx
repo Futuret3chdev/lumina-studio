@@ -3,16 +3,19 @@ import {
   Box,
   Camera,
   Download,
+  Globe,
   Image,
   ImageUp,
   RotateCw,
   Shuffle,
+  User,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CATALOG_BY_ID } from "@/lib/studio/catalog";
 import { capturePng, exportGlb, exportPng } from "@/lib/studio/export";
 import { useStudio } from "@/lib/studio/store";
+import { WORLD_SCENES } from "@/lib/studio/world";
 import { ShotFileLabel } from "@/components/studio/photo-capture";
 import type { CameraPreset } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
@@ -28,11 +31,15 @@ export function Topbar() {
   const kind = useStudio((s) => s.kind);
   const cameraPreset = useStudio((s) => s.cameraPreset);
   const autoRotate = useStudio((s) => s.autoRotate);
+  const mode = useStudio((s) => s.mode);
+  const worldScene = useStudio((s) => s.worldScene);
   const setCameraPreset = useStudio((s) => s.setCameraPreset);
   const setAutoRotate = useStudio((s) => s.setAutoRotate);
+  const setMode = useStudio((s) => s.setMode);
   const randomizeLook = useStudio((s) => s.randomizeLook);
   const saveCurrent = useStudio((s) => s.saveCurrent);
   const item = CATALOG_BY_ID[kind];
+  const scene = WORLD_SCENES.find((s) => s.id === worldScene);
 
   function handlePng() {
     try {
@@ -72,11 +79,32 @@ export function Topbar() {
           <p className="font-display text-lg leading-tight tracking-tight">
             Lumina
           </p>
-          <p className="text-xs text-muted">{item.name}</p>
+          <p className="text-xs text-muted">
+            {mode === "world" ? `MT World · ${scene?.label ?? "House"}` : item.name}
+          </p>
         </div>
       </div>
 
       <div className="pointer-events-auto hidden items-center gap-1 rounded-xl bg-surface p-1 shadow-[var(--shadow-border)] md:flex">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn("h-9 px-3", mode === "studio" && "bg-elevated text-fg")}
+          onClick={() => setMode("studio")}
+        >
+          Studio
+        </Button>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className={cn("h-9 px-3", mode === "world" && "bg-elevated text-fg")}
+          onClick={() => setMode("world")}
+        >
+          <Globe className="size-4" />
+          World
+        </Button>
         {CAMERAS.map((cam) => (
           <Button
             key={cam.id}
@@ -95,10 +123,25 @@ export function Topbar() {
       </div>
 
       <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-surface p-1 shadow-[var(--shadow-border)]">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon-sm"
+          className={cn("md:hidden", mode === "world" && "text-fg")}
+          aria-label={mode === "world" ? "Back to studio" : "Open MT World"}
+          onClick={() => setMode(mode === "world" ? "studio" : "world")}
+        >
+          <Globe className="size-4" />
+        </Button>
         <Button asChild size="sm">
           <ShotFileLabel capture ariaLabel="Take photo">
             <Camera className="size-4" />
             <span className="hidden sm:inline">Photo</span>
+          </ShotFileLabel>
+        </Button>
+        <Button asChild variant="ghost" size="icon-sm">
+          <ShotFileLabel capture intent="avatar" ariaLabel="Use photo as aviator">
+            <User className="size-4" />
           </ShotFileLabel>
         </Button>
         <Button asChild variant="ghost" size="icon-sm">
