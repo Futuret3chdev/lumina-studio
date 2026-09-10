@@ -1,30 +1,26 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { DoubleSide, SRGBColorSpace, Texture, type Group } from "three";
+import { CanvasTexture, DoubleSide, SRGBColorSpace, type Group } from "three";
+import { bakeGait } from "@/lib/studio/bake-gait";
 import { cutoutPerson } from "@/lib/studio/cutout";
-import { npcLook, type NpcLook } from "@/lib/studio/npc-look";
+import { buildPuppet } from "@/lib/studio/puppet";
 import type { MeshViewProps } from "@/lib/studio/types";
-import { gaitFromParams } from "@/lib/studio/walk";
+import { GAITS, gaitFromParams } from "@/lib/studio/walk";
 import { AvatarMesh } from "./avatar";
-import { NpcMesh } from "./npc";
 import { n } from "./shared";
 
 const AVIATOR_H = 1.62;
 
-type CutState = {
-  full: Texture;
-  aspect: number;
-  pet: boolean;
-  look: NpcLook;
+type Clip = {
+  frames: HTMLCanvasElement[];
+  fps: number;
 };
 
-function texFrom(canvas: HTMLCanvasElement) {
-  const tex = new Texture(canvas);
-  tex.colorSpace = SRGBColorSpace;
-  tex.needsUpdate = true;
-  tex.anisotropy = 8;
-  return tex;
-}
+type CutState = {
+  clips: Record<string, Clip>;
+  aspect: number;
+  pet: boolean;
+};
 
 function useCutout(url: string | null | undefined) {
   const [cut, setCut] = useState<CutState | null>(null);
@@ -45,12 +41,13 @@ function useCutout(url: string | null | undefined) {
         setCut(null);
         return;
       }
-      const full = texFrom(result.canvas);
-      const look = npcLook(result.canvas);
-      setCut((prev) => {
-        prev?.full.dispose();
-        return { full, aspect: result.aspect, pet: result.pet, look };
-      });
+      const rig = result.pet ? null : buildPuppet(result.canvas, result.pet);
+      const clips: Record<string, Clip> = {};
+      for (const gait of GAITS) {
+        const frames = bakeGait(result.canvas, rig, gait);
+        clips[gait.id] = { frames, fps: Math.max(6, Math.round(gait.speed * 1.3)) };
+      }
+      setCut({ clips, aspect: result.aspect, pet: result.pet });
       invalidate();
     };
     img.onerror = () => {
@@ -62,63 +59,67 @@ function useCutout(url: string | null | undefined) {
     };
   }, [url, invalidate]);
 
-  useEffect(
-    () => () => {
-      cut?.full.dispose();
-    },
-    [cut],
-  );
-
   return cut;
 }
 
-function PhotoWalker({
-  texture,
-  aspect,
+function PhotoGif({
+  cut,
   scale,
   height,
   params,
 }: {
-  texture: Texture;
-  aspect: number;
+  cut: CutState;
   scale: number;
   height: number;
   params: Record<string, number>;
 }) {
   const root = useRef<Group>(null);
-  const h = 0.55 * height;
-  const w = Math.min(h * 1.15, h * Math.max(0.35, aspect));
   const motion = gaitFromParams(params);
-  const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+  const clip = cut.clips[motion.id] ?? cut.clips.walk ?? cut.clips.still;
+  const tex = useMemo(() => {
+    const t = new CanvasTexture(clip?.frames[0] ?? document.createElement("canvas"));
+    t.colorSpace = SRGBColorSpace;
+    t.needsUpdate = true;
+    return t;
+  }, [clip]);
+
+  useEffect(() => () => tex.dispose(), [tex]);
 
   useFrame((state) => {
-    const g = root.current;
-    if (!g) return;
-    const t = state.clock.elapsedTime + phase;
-    const spd = motion.speed;
-    if (spd < 0.05) {
-      g.position.y = 0;
-      g.rotation.y = 0;
+    if (!clip?.frames.length) return;
+    if (clip.frames.length === 1) {
+      tex.image = clip.frames[0]!;
+      tex.needsUpdate = true;
       return;
     }
-    const step = Math.sin(t * spd);
-    g.position.y = Math.abs(step) * motion.bob;
-    g.rotation.y = step * motion.sway * 0.4;
+    const i = Math.floor(state.clock.elapsedTime * clip.fps) % clip.frames.length;
+    const frame = clip.frames[i];
+    if (frame && tex.image !== frame) {
+      tex.image = frame;
+      tex.needsUpdate = true;
+    }
   });
+
+  const h = (cut.pet ? 0.55 : AVIATOR_H) * height;
+  const w = Math.min(h * (cut.pet ? 1.15 : 0.62), h * Math.max(0.35, cut.aspect));
 
   return (
     <group ref={root} scale={scale}>
       <mesh position={[0, h / 2, 0]} castShadow>
         <planeGeometry args={[w, h]} />
         <meshStandardMaterial
-          map={texture}
+          map={tex}
           transparent
-          alphaTest={0.12}
+          alphaTest={0.08}
           roughness={0.62}
           metalness={0.04}
           side={DoubleSide}
           depthWrite
         />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.16 + w * 0.1, 16]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.28} depthWrite={false} />
       </mesh>
     </group>
   );
@@ -128,20 +129,8 @@ export function PersonMesh(props: MeshViewProps) {
   const cut = useCutout(props.photoUrl);
   const height = n(props.params, "height", 1);
 
-  if (cut?.pet) {
-    return (
-      <PhotoWalker
-        texture={cut.full}
-        aspect={cut.aspect}
-        scale={props.scale}
-        height={height}
-        params={props.params}
-      />
-    );
-  }
-
   if (cut) {
-    return <NpcMesh look={cut.look} params={props.params} scale={props.scale} />;
+    return <PhotoGif cut={cut} scale={props.scale} height={height} params={props.params} />;
   }
 
   return <AvatarMesh {...props} />;

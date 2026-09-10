@@ -1,4 +1,4 @@
-export type GaitId = "still" | "walk" | "stroll" | "strut" | "march" | "bounce";
+export type GaitId = "still" | "walk" | "run" | "bounce";
 
 export type Gait = {
   id: GaitId;
@@ -12,11 +12,9 @@ export type Gait = {
 
 export const GAITS: Gait[] = [
   { id: "still", label: "Stand", speed: 0, arms: 0, stride: 0, bob: 0, sway: 0 },
-  { id: "walk", label: "Walk", speed: 6.2, arms: 1.1, stride: 0.82, bob: 0.04, sway: 0.05 },
-  { id: "stroll", label: "Stroll", speed: 4.0, arms: 0.7, stride: 0.5, bob: 0.02, sway: 0.04 },
-  { id: "strut", label: "Strut", speed: 5.6, arms: 1.3, stride: 0.95, bob: 0.06, sway: 0.07 },
-  { id: "march", label: "March", speed: 7.4, arms: 1.45, stride: 1.05, bob: 0.045, sway: 0.03 },
-  { id: "bounce", label: "Bounce", speed: 8.2, arms: 0.9, stride: 0.45, bob: 0.12, sway: 0.08 },
+  { id: "walk", label: "Walk", speed: 6.2, arms: 1.05, stride: 0.78, bob: 0.04, sway: 0.04 },
+  { id: "run", label: "Run", speed: 9.4, arms: 1.45, stride: 1.12, bob: 0.07, sway: 0.05 },
+  { id: "bounce", label: "Bounce", speed: 7.6, arms: 0.55, stride: 0.28, bob: 0.14, sway: 0.03 },
 ];
 
 export function gaitFromParams(params: Record<string, number>): Gait & {

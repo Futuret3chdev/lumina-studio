@@ -275,52 +275,23 @@ export function buildPuppet(src: HTMLCanvasElement, petHint = false): PuppetRig 
 
   const headC = copyRect(src, minX, minY, maxX + 1, neckY + 2);
   const torsoC = copyRect(src, torsoLeft, neckY, torsoRight + 1, hipY + 2);
-
-  const wantCgiArms = !pet;
-  const sleeve = meanOpaque(data, w, minX, shoulderY, maxX, shoulderY + Math.max(8, (hipY - shoulderY) * 0.35));
-  const skin = meanOpaque(data, w, minX, minY, maxX, neckY);
-  const armH = Math.max(24, Math.round((hipY - shoulderY) * 1.28));
-  const armW = Math.max(10, bw * 0.13);
-  const armLC = wantCgiArms
-    ? cgiArm(armW, armH, sleeve, skin)
-    : copyRect(src, minX, shoulderY, torsoLeft + 4, hipY);
-  const armRC = wantCgiArms
-    ? cgiArm(armW, armH, sleeve, skin)
-    : copyRect(src, torsoRight - 4, shoulderY, maxX + 1, hipY);
-
-  const straighten = !pet && legsNeedStraighten(data, w, minX, maxX, hipY, footY);
-  const thighH = Math.max(16, kneeY - hipY);
-  const shinH = Math.max(16, footY - kneeY);
-  const thighW = Math.max(12, bw * (straighten ? 0.2 : 0.28));
-  const shinW = Math.max(10, bw * (straighten ? 0.16 : 0.24));
-  const pants = meanOpaque(data, w, minX, hipY, maxX, kneeY);
-  const lower = meanOpaque(data, w, minX, kneeY, maxX, footY - 6);
-  const photoThigh = copyRect(src, minX, hipY, maxX + 1, kneeY + 1);
-  const photoShin = copyRect(src, minX, kneeY, maxX + 1, footY + 1);
-
-  const thighLC = straighten
-    ? cgiLimb(thighW, thighH, pants, photoThigh)
-    : copyRect(src, minX, hipY, mid + 1, kneeY + 2);
-  const thighRC = straighten
-    ? cgiLimb(thighW, thighH, pants, photoThigh)
-    : copyRect(src, mid, hipY, maxX + 1, kneeY + 2);
-  const shinLC = straighten
-    ? cgiLimb(shinW, shinH, lower, photoShin)
-    : copyRect(src, minX, kneeY, mid + 1, footY + 1);
-  const shinRC = straighten
-    ? cgiLimb(shinW, shinH, lower, photoShin)
-    : copyRect(src, mid, kneeY, maxX + 1, footY + 1);
+  const armReach = Math.min(maxY, Math.round(hipY + (hipY - shoulderY) * 0.75));
+  const armLC = copyRect(src, minX, shoulderY, torsoLeft + 6, armReach + 1);
+  const armRC = copyRect(src, torsoRight - 6, shoulderY, maxX + 1, armReach + 1);
+  const thighLC = copyRect(src, minX, hipY, mid + 1, kneeY + 2);
+  const thighRC = copyRect(src, mid, hipY, maxX + 1, kneeY + 2);
+  const shinLC = copyRect(src, minX, kneeY, mid + 1, footY + 1);
+  const shinRC = copyRect(src, mid, kneeY, maxX + 1, footY + 1);
 
   if (!headC || !torsoC || !thighLC || !thighRC || !shinLC || !shinRC) return null;
 
   const neck = { x: mid, y: neckY };
   const shoulderL = { x: torsoLeft, y: shoulderY + 4 };
   const shoulderR = { x: torsoRight, y: shoulderY + 4 };
-  const stance = straighten ? bw * 0.11 : 0;
-  const hipLp = { x: (straighten ? mid - stance : hipL), y: hipY };
-  const hipRp = { x: (straighten ? mid + stance : hipR), y: hipY };
-  const kneeL = { x: hipLp.x, y: kneeY };
-  const kneeR = { x: hipRp.x, y: kneeY };
+  const hipLp = { x: hipL, y: hipY };
+  const hipRp = { x: hipR, y: hipY };
+  const kneeL = { x: hipL, y: kneeY };
+  const kneeR = { x: hipR, y: kneeY };
 
   const rel = (c: HTMLCanvasElement, originX: number, originY: number, jx: number, jy: number) =>
     part(c, jx - originX, jy - originY);
@@ -331,12 +302,12 @@ export function buildPuppet(src: HTMLCanvasElement, petHint = false): PuppetRig 
     pet,
     head: rel(headC, minX, minY, neck.x, neck.y),
     torso: rel(torsoC, torsoLeft, neckY, mid, hipY),
-    armL: armLC ? (wantCgiArms ? part(armLC, armLC.width / 2, 3) : rel(armLC, minX, shoulderY, shoulderL.x, shoulderL.y)) : null,
-    armR: armRC ? (wantCgiArms ? part(armRC, armRC.width / 2, 3) : rel(armRC, torsoRight - 4, shoulderY, shoulderR.x, shoulderR.y)) : null,
-    thighL: straighten ? part(thighLC, thighLC.width / 2, 2) : rel(thighLC, minX, hipY, hipLp.x, hipLp.y),
-    thighR: straighten ? part(thighRC, thighRC.width / 2, 2) : rel(thighRC, mid, hipY, hipRp.x, hipRp.y),
-    shinL: straighten ? part(shinLC, shinLC.width / 2, 2) : rel(shinLC, minX, kneeY, kneeL.x, kneeL.y),
-    shinR: straighten ? part(shinRC, shinRC.width / 2, 2) : rel(shinRC, mid, kneeY, kneeR.x, kneeR.y),
+    armL: armLC ? rel(armLC, minX, shoulderY, shoulderL.x, shoulderL.y) : null,
+    armR: armRC ? rel(armRC, torsoRight - 6, shoulderY, shoulderR.x, shoulderR.y) : null,
+    thighL: rel(thighLC, minX, hipY, hipLp.x, hipLp.y),
+    thighR: rel(thighRC, mid, hipY, hipRp.x, hipRp.y),
+    shinL: rel(shinLC, minX, kneeY, kneeL.x, kneeL.y),
+    shinR: rel(shinRC, mid, kneeY, kneeR.x, kneeR.y),
     neck,
     shoulderL,
     shoulderR,
@@ -346,3 +317,4 @@ export function buildPuppet(src: HTMLCanvasElement, petHint = false): PuppetRig 
     kneeR,
   };
 }
+
