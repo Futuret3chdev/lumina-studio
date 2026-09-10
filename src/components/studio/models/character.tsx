@@ -2,9 +2,11 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { DoubleSide, SRGBColorSpace, Texture, type Group } from "three";
 import { cutoutPerson } from "@/lib/studio/cutout";
+import { npcLook, type NpcLook } from "@/lib/studio/npc-look";
 import type { MeshViewProps } from "@/lib/studio/types";
 import { gaitFromParams } from "@/lib/studio/walk";
 import { AvatarMesh } from "./avatar";
+import { NpcMesh } from "./npc";
 import { n } from "./shared";
 
 const AVIATOR_H = 1.62;
@@ -13,6 +15,7 @@ type CutState = {
   full: Texture;
   aspect: number;
   pet: boolean;
+  look: NpcLook;
 };
 
 function texFrom(canvas: HTMLCanvasElement) {
@@ -43,9 +46,10 @@ function useCutout(url: string | null | undefined) {
         return;
       }
       const full = texFrom(result.canvas);
+      const look = npcLook(result.canvas);
       setCut((prev) => {
         prev?.full.dispose();
-        return { full, aspect: result.aspect, pet: result.pet };
+        return { full, aspect: result.aspect, pet: result.pet, look };
       });
       invalidate();
     };
@@ -73,19 +77,17 @@ function PhotoWalker({
   aspect,
   scale,
   height,
-  pet,
   params,
 }: {
   texture: Texture;
   aspect: number;
   scale: number;
   height: number;
-  pet: boolean;
   params: Record<string, number>;
 }) {
   const root = useRef<Group>(null);
-  const h = (pet ? 0.55 : AVIATOR_H) * height;
-  const w = Math.min(h * (pet ? 1.15 : 0.72), h * Math.max(0.35, aspect));
+  const h = 0.55 * height;
+  const w = Math.min(h * 1.15, h * Math.max(0.35, aspect));
   const motion = gaitFromParams(params);
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
 
@@ -97,21 +99,15 @@ function PhotoWalker({
     if (spd < 0.05) {
       g.position.y = 0;
       g.rotation.y = 0;
-      g.rotation.z = 0;
-      g.scale.set(scale, scale, scale);
       return;
     }
     const step = Math.sin(t * spd);
-    const land = Math.abs(Math.sin(t * spd));
-    g.position.y = land * motion.bob;
-    g.rotation.y = step * motion.sway * 0.45;
-    g.rotation.z = step * motion.sway * 0.25;
-    const squash = 1 - land * 0.03 * (motion.bob > 0 ? 1 : 0);
-    g.scale.set(scale * (2 - squash), scale * squash, scale);
+    g.position.y = Math.abs(step) * motion.bob;
+    g.rotation.y = step * motion.sway * 0.4;
   });
 
   return (
-    <group ref={root}>
+    <group ref={root} scale={scale}>
       <mesh position={[0, h / 2, 0]} castShadow>
         <planeGeometry args={[w, h]} />
         <meshStandardMaterial
@@ -124,10 +120,6 @@ function PhotoWalker({
           depthWrite
         />
       </mesh>
-      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
-        <circleGeometry args={[0.16 + w * 0.12, 16]} />
-        <meshBasicMaterial color="#000000" transparent opacity={0.28} depthWrite={false} />
-      </mesh>
     </group>
   );
 }
@@ -136,17 +128,20 @@ export function PersonMesh(props: MeshViewProps) {
   const cut = useCutout(props.photoUrl);
   const height = n(props.params, "height", 1);
 
-  if (cut) {
+  if (cut?.pet) {
     return (
       <PhotoWalker
         texture={cut.full}
         aspect={cut.aspect}
         scale={props.scale}
         height={height}
-        pet={cut.pet}
         params={props.params}
       />
     );
+  }
+
+  if (cut) {
+    return <NpcMesh look={cut.look} params={props.params} scale={props.scale} />;
   }
 
   return <AvatarMesh {...props} />;
