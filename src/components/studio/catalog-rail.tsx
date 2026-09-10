@@ -12,6 +12,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CATALOG, CATEGORIES, itemsIn } from "@/lib/studio/catalog";
+import { CAST_LOOKS, castFaceUrl } from "@/lib/studio/mt-world";
 import { ModelFileLabel, ShotFileLabel } from "@/components/studio/photo-capture";
 import { useStudio } from "@/lib/studio/store";
 import type { CategoryId } from "@/lib/studio/types";
@@ -51,6 +52,11 @@ function usePlaceOrStage() {
       setKind(kind);
     }
   };
+}
+
+function wearLook(name: string, url: string) {
+  useStudio.getState().placeKind("avatar", url);
+  toast.success(`${name} is in the house — pick a dress`);
 }
 
 export function CatalogRail() {
@@ -177,6 +183,32 @@ export function CatalogRail() {
               );
             })}
           </ul>
+        )}
+        {category === "people" && (
+          <div className="mt-3">
+            <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wider text-subtle">
+              MT World looks
+            </p>
+            <div className="grid grid-cols-3 gap-1.5 px-1 pb-2">
+              {CAST_LOOKS.map((look) => (
+                <button
+                  key={look.id}
+                  type="button"
+                  onClick={() => wearLook(look.name, castFaceUrl(look.id))}
+                  className="flex flex-col items-center gap-1 rounded-md p-1 text-xs text-muted hover:bg-elevated hover:text-fg"
+                >
+                  <img
+                    src={castFaceUrl(look.id)}
+                    alt=""
+                    className="aspect-square w-full rounded-md object-cover"
+                    loading="lazy"
+                    crossOrigin="anonymous"
+                  />
+                  <span className="truncate">{look.name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
         )}
       </ScrollArea>
       <div className="p-2">
@@ -311,6 +343,27 @@ export function MobileCatalog({ onOpenGallery }: { onOpenGallery?: () => void })
               )}
             >
               {outfit.label}
+            </button>
+          ))}
+        </div>
+      )}
+      {mode === "world" && (
+        <div className="flex gap-1.5 overflow-x-auto px-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          {CAST_LOOKS.slice(0, 16).map((look) => (
+            <button
+              key={look.id}
+              type="button"
+              onClick={() => wearLook(look.name, castFaceUrl(look.id))}
+              className="h-11 w-11 shrink-0 overflow-hidden rounded-full bg-elevated"
+              aria-label={look.name}
+            >
+              <img
+                src={castFaceUrl(look.id)}
+                alt=""
+                className="size-full object-cover"
+                loading="lazy"
+                crossOrigin="anonymous"
+              />
             </button>
           ))}
         </div>
