@@ -1,13 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import {
-  DoubleSide,
-  PlaneGeometry,
-  SRGBColorSpace,
-  Texture,
-  type Group,
-  type Mesh,
-} from "three";
+import { DoubleSide, SRGBColorSpace, Texture, type Group } from "three";
 import { cutoutPerson } from "@/lib/studio/cutout";
 import type { MeshViewProps } from "@/lib/studio/types";
 import { gaitFromParams } from "@/lib/studio/walk";
@@ -75,20 +68,6 @@ function useCutout(url: string | null | undefined) {
   return cut;
 }
 
-function rot(
-  x: number,
-  y: number,
-  ox: number,
-  oy: number,
-  a: number,
-): [number, number] {
-  const c = Math.cos(a);
-  const s = Math.sin(a);
-  const dx = x - ox;
-  const dy = y - oy;
-  return [ox + dx * c - dy * s, oy + dx * s + dy * c];
-}
-
 function PhotoWalker({
   texture,
   aspect,
@@ -104,94 +83,37 @@ function PhotoWalker({
   pet: boolean;
   params: Record<string, number>;
 }) {
-  const meshRef = useRef<Mesh>(null);
   const root = useRef<Group>(null);
-  const rest = useRef<Float32Array | null>(null);
   const h = (pet ? 0.55 : AVIATOR_H) * height;
   const w = Math.min(h * (pet ? 1.15 : 0.72), h * Math.max(0.35, aspect));
   const motion = gaitFromParams(params);
   const phase = useMemo(() => Math.random() * Math.PI * 2, []);
 
-  const geom = useMemo(() => {
-    const g = new PlaneGeometry(w, h, 14, 22);
-    g.translate(0, h / 2, 0);
-    rest.current = Float32Array.from(g.attributes.position!.array as Float32Array);
-    return g;
-  }, [w, h]);
-
   useFrame((state) => {
-    const mesh = meshRef.current;
-    const pos = mesh?.geometry.attributes.position;
-    if (!mesh || !pos || !rest.current) return;
-    const arr = pos.array as Float32Array;
-    const src = rest.current;
+    const g = root.current;
+    if (!g) return;
     const t = state.clock.elapsedTime + phase;
     const spd = motion.speed;
-    const wave = spd < 0.05 ? 0 : Math.sin(t * spd);
-    const bob = Math.abs(wave) * motion.bob;
-
-    if (root.current) root.current.position.y = bob;
-
-    if (pet || spd < 0.05) {
-      for (let i = 0; i < arr.length; i += 1) arr[i] = src[i]!;
-      pos.needsUpdate = true;
-      if (root.current) root.current.rotation.y = pet ? wave * motion.sway : 0;
+    if (spd < 0.05) {
+      g.position.y = 0;
+      g.rotation.y = 0;
+      g.rotation.z = 0;
+      g.scale.set(scale, scale, scale);
       return;
     }
-
-    const hipY = h * 0.5;
-    const kneeY = h * 0.25;
-    const shY = h * 0.74;
-    const hipXL = -w * 0.08;
-    const hipXR = w * 0.08;
-    const shXL = -w * 0.18;
-    const shXR = w * 0.18;
-    const hipL = wave * motion.stride;
-    const hipR = -wave * motion.stride;
-    const kneeL = Math.max(0, -wave) * motion.stride * 0.95;
-    const kneeR = Math.max(0, wave) * motion.stride * 0.95;
-    const armL = -wave * motion.arms;
-    const armR = wave * motion.arms;
-
-    for (let i = 0; i < arr.length; i += 3) {
-      let x = src[i]!;
-      let y = src[i + 1]!;
-      let z = src[i + 2]!;
-      const u = x / w + 0.5;
-      const v = y / h;
-
-      if (v < 0.52 && u < 0.5) {
-        [x, y] = rot(x, y, hipXL, hipY, hipL);
-        if (v < 0.28) {
-          const [kx, ky] = rot(hipXL, kneeY, hipXL, hipY, hipL);
-          [x, y] = rot(x, y, kx, ky, kneeL);
-        }
-        z += wave * 0.035;
-      } else if (v < 0.52 && u >= 0.5) {
-        [x, y] = rot(x, y, hipXR, hipY, hipR);
-        if (v < 0.28) {
-          const [kx, ky] = rot(hipXR, kneeY, hipXR, hipY, hipR);
-          [x, y] = rot(x, y, kx, ky, kneeR);
-        }
-        z -= wave * 0.035;
-      } else if (v < 0.84 && v > 0.4 && u < 0.36) {
-        [x, y] = rot(x, y, shXL, shY, armL);
-        z -= wave * 0.05;
-      } else if (v < 0.84 && v > 0.4 && u > 0.64) {
-        [x, y] = rot(x, y, shXR, shY, armR);
-        z += wave * 0.05;
-      }
-
-      arr[i] = x;
-      arr[i + 1] = y;
-      arr[i + 2] = z;
-    }
-    pos.needsUpdate = true;
+    const step = Math.sin(t * spd);
+    const land = Math.abs(Math.sin(t * spd));
+    g.position.y = land * motion.bob;
+    g.rotation.y = step * motion.sway * 0.45;
+    g.rotation.z = step * motion.sway * 0.25;
+    const squash = 1 - land * 0.03 * motion.bounce;
+    g.scale.set(scale * (2 - squash), scale * squash, scale);
   });
 
   return (
-    <group ref={root} scale={scale}>
-      <mesh ref={meshRef} geometry={geom} castShadow>
+    <group ref={root}>
+      <mesh position={[0, h / 2, 0]} castShadow>
+        <planeGeometry args={[w, h]} />
         <meshStandardMaterial
           map={texture}
           transparent
