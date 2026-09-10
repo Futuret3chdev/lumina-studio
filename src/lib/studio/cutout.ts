@@ -157,6 +157,46 @@ function fillHoles(keep: Uint8Array, w: number, h: number) {
   return out;
 }
 
+function cropFromData(d: Uint8ClampedArray, w: number, h: number): PersonCutout | null {
+  let minX = w;
+  let minY = h;
+  let maxX = 0;
+  let maxY = 0;
+  let solid = 0;
+  for (let y = 0; y < h; y += 1) {
+    for (let x = 0; x < w; x += 1) {
+      if ((d[(y * w + x) * 4 + 3] ?? 0) < 18) continue;
+      solid += 1;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (solid < 80 || maxX <= minX || maxY <= minY) return null;
+  const pad = 3;
+  minX = Math.max(0, minX - pad);
+  minY = Math.max(0, minY - pad);
+  maxX = Math.min(w - 1, maxX + pad);
+  maxY = Math.min(h - 1, maxY + pad);
+  const cw = maxX - minX + 1;
+  const ch = maxY - minY + 1;
+  const crop = octxImage(d, w, minX, minY, cw, ch);
+  const out = document.createElement("canvas");
+  out.width = cw;
+  out.height = ch;
+  const octx = out.getContext("2d");
+  if (!octx) return null;
+  octx.putImageData(crop, 0, 0);
+  const ratio = ch / Math.max(1, cw);
+  return {
+    canvas: out,
+    fullBody: ratio >= 1.28,
+    pet: ratio < 1.22,
+    aspect: cw / Math.max(1, ch),
+  };
+}
+
 export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): PersonCutout | null {
   const max = 560;
   const scale = Math.min(1, max / Math.max(sw, sh, 1));
@@ -170,6 +210,15 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
   ctx.drawImage(img, 0, 0, w, h);
   const image = ctx.getImageData(0, 0, w, h);
   const d = image.data;
+
+  let trans = 0;
+  const nPix = w * h;
+  for (let i = 3; i < d.length; i += 4) {
+    if ((d[i] ?? 255) < 248) trans += 1;
+  }
+  if (trans > nPix * 0.03) {
+    return cropFromData(d, w, h);
+  }
 
   const ring = Math.max(2, Math.round(Math.min(w, h) * 0.035));
   const rs: number[] = [];
@@ -225,6 +274,27 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     return best;
   };
 
+  const textured = new Uint8Array(w * h);
+  for (let y = 1; y < h - 1; y += 1) {
+    for (let x = 1; x < w - 1; x += 1) {
+      const i = idx(x, y, w);
+      const l = (d[i] ?? 0) * 2 + (d[i + 1] ?? 0) * 3 + (d[i + 2] ?? 0);
+      let acc = 0;
+      let acc2 = 0;
+      for (let dy = -1; dy <= 1; dy += 1) {
+        for (let dx = -1; dx <= 1; dx += 1) {
+          const j = idx(x + dx, y + dy, w);
+          const v = (d[j] ?? 0) * 2 + (d[j + 1] ?? 0) * 3 + (d[j + 2] ?? 0);
+          acc += v;
+          acc2 += v * v;
+        }
+      }
+      const mean = acc / 9;
+      const vr = acc2 / 9 - mean * mean;
+      if (vr > 2800) textured[y * w + x] = 1;
+    }
+  }
+
   const cx = (w - 1) / 2;
   const cy = (h - 1) * 0.46;
   const rx = w * 0.22;
@@ -271,6 +341,7 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     const r = d[i] ?? 0;
     const g = d[i + 1] ?? 0;
     const b = d[i + 2] ?? 0;
+    if (textured[y * w + x] && nearestBg(r, g, b) > 24) continue;
     if (nearestBg(r, g, b) > bgTol) continue;
     keep[y * w + x] = 0;
     const nbs: [number, number][] = [
@@ -300,7 +371,7 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     }
   }
 
-  const opened = morph(morph(keep, w, h, 3, false), w, h, 3, true);
+  const opened = morph(morph(keep, w, h, 1, false), w, h, 2, true);
   const main = fillHoles(largestComponent(opened, w, h), w, h);
   const restored = new Uint8Array(w * h);
   for (let i = 0; i < restored.length; i += 1) {
@@ -336,46 +407,7 @@ export function cutoutPerson(img: CanvasImageSource, sw: number, sh: number): Pe
     }
   }
 
-  let minX = w;
-  let minY = h;
-  let maxX = 0;
-  let maxY = 0;
-  let solid = 0;
-  for (let y = 0; y < h; y += 1) {
-    for (let x = 0; x < w; x += 1) {
-      if ((d[(y * w + x) * 4 + 3] ?? 0) < 18) continue;
-      solid += 1;
-      if (x < minX) minX = x;
-      if (y < minY) minY = y;
-      if (x > maxX) maxX = x;
-      if (y > maxY) maxY = y;
-    }
-  }
-  if (solid < 80 || maxX <= minX || maxY <= minY) return null;
-
-  ctx.putImageData(image, 0, 0);
-
-  const pad = 3;
-  minX = Math.max(0, minX - pad);
-  minY = Math.max(0, minY - pad);
-  maxX = Math.min(w - 1, maxX + pad);
-  maxY = Math.min(h - 1, maxY + pad);
-  const cw = maxX - minX + 1;
-  const ch = maxY - minY + 1;
-  const crop = octxImage(d, w, minX, minY, cw, ch);
-  const out = document.createElement("canvas");
-  out.width = cw;
-  out.height = ch;
-  const octx = out.getContext("2d");
-  if (!octx) return null;
-  octx.putImageData(crop, 0, 0);
-  const ratio = ch / Math.max(1, cw);
-  return {
-    canvas: out,
-    fullBody: ratio >= 1.28,
-    pet: ratio < 1.22,
-    aspect: cw / Math.max(1, ch),
-  };
+  return cropFromData(d, w, h);
 }
 
 function octxImage(

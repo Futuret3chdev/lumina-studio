@@ -10,8 +10,9 @@ import { n } from "./shared";
 const AVIATOR_H = 1.62;
 
 type CutState = {
-  rig: PuppetRig;
+  rig: PuppetRig | null;
   textures: Map<HTMLCanvasElement, Texture>;
+  full: Texture;
   aspect: number;
   fullBody: boolean;
   pet: boolean;
@@ -44,29 +45,30 @@ function usePuppet(url: string | null | undefined) {
         setCut(null);
         return;
       }
-      const rig = buildPuppet(result.canvas, result.pet);
-      if (!rig) {
-        setCut(null);
-        return;
-      }
+      const rig = result.pet ? null : buildPuppet(result.canvas, result.pet);
       const textures = new Map<HTMLCanvasElement, Texture>();
       const add = (p: PuppetPart | null) => {
         if (!p) return;
         textures.set(p.canvas, texFrom(p.canvas));
       };
-      add(rig.head);
-      add(rig.torso);
-      add(rig.armL);
-      add(rig.armR);
-      add(rig.thighL);
-      add(rig.thighR);
-      add(rig.shinL);
-      add(rig.shinR);
+      if (rig) {
+        add(rig.head);
+        add(rig.torso);
+        add(rig.armL);
+        add(rig.armR);
+        add(rig.thighL);
+        add(rig.thighR);
+        add(rig.shinL);
+        add(rig.shinR);
+      }
+      const full = texFrom(result.canvas);
       setCut((prev) => {
         prev?.textures.forEach((t) => t.dispose());
+        prev?.full.dispose();
         return {
           rig,
           textures,
+          full,
           aspect: result.aspect,
           fullBody: result.fullBody,
           pet: result.pet,
@@ -86,6 +88,7 @@ function usePuppet(url: string | null | undefined) {
   useEffect(
     () => () => {
       cut?.textures.forEach((t) => t.dispose());
+      cut?.full.dispose();
     },
     [cut],
   );
@@ -138,6 +141,7 @@ function WalkPuppet({
   height: number;
 }) {
   const { rig, textures, pet } = cut;
+  if (!rig) return null;
   const root = useRef<Group>(null);
   const hipL = useRef<Group>(null);
   const hipR = useRef<Group>(null);
@@ -284,12 +288,72 @@ function WalkPuppet({
   );
 }
 
+function SimpleWalker({
+  texture,
+  aspect,
+  scale,
+  height,
+  pet,
+}: {
+  texture: Texture;
+  aspect: number;
+  scale: number;
+  height: number;
+  pet: boolean;
+}) {
+  const ref = useRef<Group>(null);
+  const h = (pet ? 0.55 : AVIATOR_H) * height;
+  const w = Math.min(h * (pet ? 1.1 : 0.72), h * aspect);
+  const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+  useFrame((state) => {
+    const g = ref.current;
+    if (!g) return;
+    const t = state.clock.elapsedTime + phase;
+    const spd = pet ? 9.2 : 7.1;
+    const s = Math.sin(t * spd);
+    g.position.y = Math.abs(s) * (pet ? 0.03 : 0.04);
+    g.rotation.y = s * 0.08;
+  });
+  return (
+    <group ref={ref} scale={scale}>
+      <mesh position={[0, h / 2, 0]} castShadow>
+        <planeGeometry args={[w, h]} />
+        <meshStandardMaterial
+          map={texture}
+          transparent
+          alphaTest={0.12}
+          roughness={0.62}
+          metalness={0.04}
+          side={DoubleSide}
+          depthWrite
+        />
+      </mesh>
+      <mesh position={[0, 0.02, 0]} rotation={[-Math.PI / 2, 0, 0]}>
+        <circleGeometry args={[0.16 + w * 0.12, 16]} />
+        <meshBasicMaterial color="#000000" transparent opacity={0.28} depthWrite={false} />
+      </mesh>
+    </group>
+  );
+}
+
 export function PersonMesh(props: MeshViewProps) {
   const cut = usePuppet(props.photoUrl);
   const height = n(props.params, "height", 1);
   const forceCut = n(props.params, "cutout", 0) > 0.5;
 
-  if (cut && (cut.fullBody || cut.pet || forceCut)) {
+  if (cut && (cut.pet || !cut.rig || (forceCut && !cut.fullBody))) {
+    return (
+      <SimpleWalker
+        texture={cut.full}
+        aspect={cut.aspect}
+        scale={props.scale}
+        height={height}
+        pet={cut.pet}
+      />
+    );
+  }
+
+  if (cut?.fullBody && cut.rig) {
     return <WalkPuppet cut={cut} scale={props.scale} height={height} />;
   }
 

@@ -192,13 +192,21 @@ export function Inspector() {
                 />
               </div>
               <p className="text-sm text-fg">{selected.name}</p>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => useStudio.getState().setEditingCutout(selected.id)}
+              >
+                Cut it out myself
+              </Button>
               {selected.kind === "photo-relief" && (
                 <Button
                   type="button"
+                  variant="secondary"
                   className="w-full"
                   onClick={() => convertToPerson(selected.id)}
                 >
-                  Cut out background
+                  Auto cut-out
                 </Button>
               )}
               <Field

@@ -126,6 +126,7 @@ export type StudioState = {
   worldScene: WorldSceneId;
   worldPlaces: WorldPlace[];
   selectedPlaceId: string | null;
+  editingCutoutId: string | null;
   setKind: (kind: AssetKind) => void;
   setCategory: (category: CategoryId) => void;
   setParam: (key: string, value: number) => void;
@@ -162,6 +163,8 @@ export type StudioState = {
   movePlace: (id: string, x: number, z: number) => void;
   updatePlace: (id: string, patch: Partial<WorldPlace>) => void;
   convertToPerson: (id: string) => void;
+  setEditingCutout: (id: string | null) => void;
+  applyCutout: (id: string, dataUrl: string) => void;
   removePlace: (id: string) => void;
 };
 
@@ -400,6 +403,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   worldScene: savedWorld.scene,
   worldPlaces: savedWorld.places,
   selectedPlaceId: null,
+  editingCutoutId: null,
   setKind: (kind) => {
     const item = CATALOG_BY_ID[kind];
     const finish = KIND_FINISH[kind];
@@ -729,6 +733,7 @@ export const useStudio = create<StudioState>((set, get) => ({
         roughness: finish.roughness,
         params: { ...item.defaults, dress: 0 },
         photoUrl,
+        photoSource: photoUrl,
       };
       const worldPlaces = [...state.worldPlaces, place];
       writeWorld(state.worldScene, worldPlaces);
@@ -792,6 +797,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       roughness: finish.roughness,
       params: { ...item.defaults, dress: 0, cutout: 1 },
       photoUrl,
+      photoSource: photoUrl,
     };
     const worldPlaces = [...state.worldPlaces, place];
     writeWorld(state.worldScene, worldPlaces);
@@ -906,6 +912,31 @@ export const useStudio = create<StudioState>((set, get) => ({
       category: "people",
       params: place.params,
       scale: place.scale,
+    });
+  },
+  setEditingCutout: (editingCutoutId) => set({ editingCutoutId }),
+  applyCutout: (id, dataUrl) => {
+    const state = get();
+    const target = state.worldPlaces.find((p) => p.id === id);
+    if (!target) return;
+    const worldPlaces = state.worldPlaces.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            kind: "avatar" as const,
+            photoUrl: dataUrl,
+            photoSource: p.photoSource ?? p.photoUrl,
+            params: { ...p.params, cutout: 1, handCut: 1 },
+          }
+        : p,
+    );
+    writeWorld(state.worldScene, worldPlaces);
+    set({
+      worldPlaces,
+      editingCutoutId: null,
+      selectedPlaceId: id,
+      kind: "avatar",
+      params: worldPlaces.find((p) => p.id === id)?.params,
     });
   },
   removePlace: (id) => {

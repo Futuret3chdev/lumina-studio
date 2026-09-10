@@ -115,6 +115,7 @@ export type WorldPlace = {
   roughness: number;
   params: Record<string, number>;
   photoUrl?: string;
+  photoSource?: string;
   glbUrl?: string;
 };
 

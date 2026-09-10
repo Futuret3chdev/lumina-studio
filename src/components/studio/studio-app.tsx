@@ -4,6 +4,7 @@ import { Toaster } from "sonner";
 import { Button } from "@/components/ui/button";
 import { useStudio } from "@/lib/studio/store";
 import { CatalogRail, MobileCatalog } from "./catalog-rail";
+import { CutoutEditor } from "./cutout-editor";
 import { GalleryPanel } from "./gallery-panel";
 import { Inspector } from "./inspector";
 import { PhotoCapture } from "./photo-capture";
@@ -16,6 +17,7 @@ export function StudioApp() {
   const galleryOpen = useStudio((s) => s.galleryOpen);
   const selectedPlaceId = useStudio((s) => s.selectedPlaceId);
   const worldPlaces = useStudio((s) => s.worldPlaces);
+  const editingCutoutId = useStudio((s) => s.editingCutoutId);
   const [sheet, setSheet] = useState<"inspector" | null>(null);
   const selected = worldPlaces.find((p) => p.id === selectedPlaceId);
 
@@ -50,6 +52,7 @@ export function StudioApp() {
 
       <Topbar />
       <PhotoCapture />
+      {editingCutoutId ? <CutoutEditor /> : null}
 
       <div className="pointer-events-none absolute bottom-3 left-3 top-20 hidden md:flex lg:bottom-4 lg:left-4">
         <CatalogRail />
