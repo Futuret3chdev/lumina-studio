@@ -3,9 +3,25 @@ import { Camera } from "lucide-react";
 import { toast } from "sonner";
 import { fileToShot, isPhotoFile } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
+import type { PhotoImportMode } from "@/lib/studio/store";
 import { cn } from "@/lib/utils";
 
-export async function ingestPhotoFile(file: File) {
+export function isModelFile(file: File) {
+  return (
+    file.type === "model/gltf-binary" ||
+    file.type === "model/gltf+json" ||
+    /\.(glb|gltf)$/i.test(file.name)
+  );
+}
+
+export async function ingestPhotoFile(
+  file: File,
+  intent: PhotoImportMode = "sculpt",
+) {
+  if (isModelFile(file)) {
+    await ingestModelFile(file);
+    return;
+  }
   if (!isPhotoFile(file)) {
     toast.error("That file is not a photo");
     return;
@@ -13,8 +29,17 @@ export async function ingestPhotoFile(file: File) {
   useStudio.getState().setPhotoBusy(true);
   try {
     const shot = await fileToShot(file);
-    useStudio.getState().importShot(shot, "sculpt");
-    toast.success("Photo is on the stage — drag to orbit");
+    const mode = useStudio.getState().mode;
+    const next =
+      intent === "avatar" ? "avatar" : mode === "world" ? "sculpt" : intent;
+    useStudio.getState().importShot(shot, next);
+    if (next === "avatar") {
+      toast.success("That's you — you're in the house. Dress, then place models.");
+    } else if (mode === "world") {
+      toast.success("Photo is in the world — tap the floor to move it");
+    } else {
+      toast.success("Photo is on the stage — drag to orbit");
+    }
   } catch (err) {
     toast.error(err instanceof Error ? err.message : "Could not read photo");
   } finally {
@@ -22,10 +47,35 @@ export async function ingestPhotoFile(file: File) {
   }
 }
 
-function onFileInput(event: ChangeEvent<HTMLInputElement>) {
+export async function ingestModelFile(file: File) {
+  if (!isModelFile(file)) {
+    toast.error("Upload a .glb or .gltf model");
+    return;
+  }
+  if (file.size > 12 * 1024 * 1024) {
+    toast.error("That model is too large (12 MB max)");
+    return;
+  }
+  const url = URL.createObjectURL(file);
+  useStudio.getState().placeUpload(file.name.replace(/\.[^.]+$/, "") || "Model", url);
+  toast.success("Model is in the world — tap the floor to place it");
+}
+
+function onFileInput(intent: PhotoImportMode) {
+  return (event: ChangeEvent<HTMLInputElement>) => {
+    const input = event.currentTarget;
+    const file = input.files?.[0];
+    if (file) void ingestPhotoFile(file, intent);
+    window.setTimeout(() => {
+      input.value = "";
+    }, 0);
+  };
+}
+
+function onModelInput(event: ChangeEvent<HTMLInputElement>) {
   const input = event.currentTarget;
   const file = input.files?.[0];
-  if (file) void ingestPhotoFile(file);
+  if (file) void ingestModelFile(file);
   window.setTimeout(() => {
     input.value = "";
   }, 0);
@@ -38,8 +88,12 @@ export const ShotFileLabel = forwardRef<
     className?: string;
     children: ReactNode;
     ariaLabel?: string;
+    intent?: PhotoImportMode;
   }
->(function ShotFileLabel({ capture, className, children, ariaLabel }, ref) {
+>(function ShotFileLabel(
+  { capture, className, children, ariaLabel, intent = "sculpt" },
+  ref,
+) {
   return (
     <label
       ref={ref}
@@ -51,10 +105,44 @@ export const ShotFileLabel = forwardRef<
     >
       <input
         type="file"
-        accept={capture ? "image/*" : "image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"}
-        capture={capture ? "environment" : undefined}
+        accept={
+          capture
+            ? "image/*"
+            : "image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+        }
+        capture={
+          capture
+            ? intent === "avatar"
+              ? "user"
+              : "environment"
+            : undefined
+        }
         className="absolute inset-0 z-10 size-full cursor-pointer opacity-0"
-        onChange={onFileInput}
+        onChange={onFileInput(intent)}
+      />
+      {children}
+    </label>
+  );
+});
+
+export const ModelFileLabel = forwardRef<
+  HTMLLabelElement,
+  { className?: string; children: ReactNode; ariaLabel?: string }
+>(function ModelFileLabel({ className, children, ariaLabel }, ref) {
+  return (
+    <label
+      ref={ref}
+      aria-label={ariaLabel ?? "Upload 3D model"}
+      className={cn(
+        "relative inline-flex cursor-pointer items-center justify-center overflow-hidden",
+        className,
+      )}
+    >
+      <input
+        type="file"
+        accept=".glb,.gltf,model/gltf-binary,model/gltf+json"
+        className="absolute inset-0 z-10 size-full cursor-pointer opacity-0"
+        onChange={onModelInput}
       />
       {children}
     </label>
@@ -66,14 +154,18 @@ export function PhotoCapture() {
 
   useEffect(() => {
     function onPaste(e: ClipboardEvent) {
-      const file = [...(e.clipboardData?.files ?? [])].find(isPhotoFile);
+      const file = [...(e.clipboardData?.files ?? [])].find(
+        (f) => isPhotoFile(f) || isModelFile(f),
+      );
       if (file) void ingestPhotoFile(file);
     }
     function onDragOver(e: DragEvent) {
       if ([...(e.dataTransfer?.types ?? [])].includes("Files")) e.preventDefault();
     }
     function onDrop(e: DragEvent) {
-      const file = [...(e.dataTransfer?.files ?? [])].find(isPhotoFile);
+      const file = [...(e.dataTransfer?.files ?? [])].find(
+        (f) => isPhotoFile(f) || isModelFile(f),
+      );
       if (!file) return;
       e.preventDefault();
       void ingestPhotoFile(file);
@@ -97,7 +189,7 @@ export function PhotoCapture() {
           <Camera className="size-6 text-subtle" />
         </div>
         <p className="font-display text-xl leading-tight">Sculpting photo</p>
-        <p className="text-sm text-muted">Lifting your shot onto the turntable…</p>
+        <p className="text-sm text-muted">Lifting your shot onto the stage…</p>
       </div>
     </div>
   );

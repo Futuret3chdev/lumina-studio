@@ -1,11 +1,12 @@
 export type CategoryId =
+  | "photo"
+  | "people"
   | "vehicle"
   | "building"
   | "nature"
   | "furniture"
   | "prop"
-  | "primitive"
-  | "photo";
+  | "primitive";
 
 export type AssetKind =
   | "sports-car"
@@ -38,7 +39,8 @@ export type AssetKind =
   | "cylinder"
   | "torus"
   | "capsule"
-  | "photo-relief";
+  | "photo-relief"
+  | "avatar";
 
 export type EnvPreset =
   | "studio"
@@ -49,6 +51,19 @@ export type EnvPreset =
   | "forest";
 
 export type CameraPreset = "hero" | "front" | "side" | "top";
+
+export type AppMode = "studio" | "world";
+
+export type WorldSceneId = "house" | "lot" | "garden";
+
+export type OutfitId =
+  | "aviator"
+  | "street"
+  | "formal"
+  | "casual"
+  | "mt"
+  | "cape"
+  | "token";
 
 export type RangeParam = {
   key: string;
@@ -84,6 +99,23 @@ export type SavedAsset = {
   thumbnail: string;
   createdAt: number;
   photoData?: string;
+};
+
+export type WorldPlace = {
+  id: string;
+  kind: AssetKind | "upload";
+  name: string;
+  x: number;
+  z: number;
+  rotY: number;
+  scale: number;
+  bodyColor: string;
+  accentColor: string;
+  metalness: number;
+  roughness: number;
+  params: Record<string, number>;
+  photoUrl?: string;
+  glbUrl?: string;
 };
 
 export type MeshViewProps = {

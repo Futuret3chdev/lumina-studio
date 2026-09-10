@@ -1,10 +1,12 @@
 import { ACCENT_SWATCHES, BODY_SWATCHES, CATALOG_BY_ID, ENV_PRESETS } from "@/lib/studio/catalog";
 import { useStudio } from "@/lib/studio/store";
+import { OUTFITS, WORLD_SCENES } from "@/lib/studio/world";
 import { cn } from "@/lib/utils";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
+import { Button } from "@/components/ui/button";
 
 function Swatches({
   label,
@@ -137,19 +139,113 @@ export function Inspector() {
   const wrapPhoto = useStudio((s) => s.wrapPhoto);
   const activePhotoId = useStudio((s) => s.activePhotoId);
   const setWrapPhoto = useStudio((s) => s.setWrapPhoto);
+  const mode = useStudio((s) => s.mode);
+  const worldScene = useStudio((s) => s.worldScene);
+  const setWorldScene = useStudio((s) => s.setWorldScene);
+  const selectedPlaceId = useStudio((s) => s.selectedPlaceId);
+  const worldPlaces = useStudio((s) => s.worldPlaces);
+  const updatePlace = useStudio((s) => s.updatePlace);
+  const removePlace = useStudio((s) => s.removePlace);
   const item = CATALOG_BY_ID[kind];
   const hasPhoto = Boolean(activePhotoId);
   const isPhoto = kind === "photo-relief";
+  const isAvatar = kind === "avatar";
+  const selected = worldPlaces.find((p) => p.id === selectedPlaceId);
+  const dress = Math.round(params.dress ?? 0);
 
   return (
     <aside className="pointer-events-auto flex h-full w-full flex-col bg-surface lg:w-72 lg:rounded-xl lg:shadow-[var(--shadow-border)]">
       <div className="px-4 py-3">
-        <p className="font-display text-xl leading-tight">{item.name}</p>
-        <p className="mt-1 text-sm text-muted">{item.blurb}</p>
+        <p className="font-display text-xl leading-tight">
+          {mode === "world" ? selected?.name ?? "MT World" : item.name}
+        </p>
+        <p className="mt-1 text-sm text-muted">
+          {mode === "world"
+            ? selected
+              ? "Tap the floor to move it. Dress yourself, drop models, make it home."
+              : "Empty world. Me · Aviator uses your selfie. Tap any model or Upload 3D to drop it in."
+            : item.blurb}
+        </p>
       </div>
       <Separator />
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 px-4 py-4">
+          {mode === "world" && (
+            <div>
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
+                Where
+              </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {WORLD_SCENES.map((scene) => (
+                  <button
+                    key={scene.id}
+                    type="button"
+                    onClick={() => setWorldScene(scene.id)}
+                    className={cn(
+                      "h-11 rounded-md px-1 text-xs font-medium transition-colors duration-150",
+                      worldScene === scene.id
+                        ? "bg-elevated text-fg shadow-[var(--shadow-border)]"
+                        : "text-muted hover:bg-elevated hover:text-fg",
+                    )}
+                  >
+                    {scene.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {(isAvatar || selected?.kind === "avatar") && (
+            <div>
+              <p className="mb-3 text-xs font-medium uppercase tracking-wider text-subtle">
+                Dress
+              </p>
+              <div className="grid grid-cols-3 gap-1.5">
+                {OUTFITS.map((outfit) => (
+                  <button
+                    key={outfit.id}
+                    type="button"
+                    onClick={() => {
+                      const s = useStudio.getState();
+                      const photo = s.photos.find((p) => p.id === s.activePhotoId);
+                      if (!s.worldPlaces.some((p) => p.kind === "avatar")) {
+                        s.placeKind("avatar", photo?.url);
+                      }
+                      if (s.mode !== "world") s.setMode("world");
+                      s.setParam("dress", outfit.dress);
+                    }}
+                    className={cn(
+                      "h-11 rounded-md text-xs font-medium transition-colors duration-150",
+                      dress === outfit.dress
+                        ? "bg-elevated text-fg shadow-[var(--shadow-border)]"
+                        : "text-muted hover:bg-elevated hover:text-fg",
+                    )}
+                  >
+                    {outfit.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+          {mode === "world" && selected && (
+            <div className="flex flex-col gap-3">
+              <Field
+                label="Turn"
+                value={selected.rotY}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { rotY: value })}
+              />
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => removePlace(selected.id)}
+              >
+                Remove from world
+              </Button>
+            </div>
+          )}
           {hasPhoto && (
             <ToggleRow
               label="Wrap onto model"
@@ -201,7 +297,9 @@ export function Inspector() {
               Shape
             </p>
             <div className="flex flex-col gap-3">
-              {item.params.map((field) => (
+              {item.params
+                .filter((field) => !(isAvatar && field.key === "dress"))
+                .map((field) => (
                 <Field
                   key={field.key}
                   label={field.label}

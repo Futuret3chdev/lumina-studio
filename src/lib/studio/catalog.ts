@@ -17,6 +17,7 @@ const shape = (
 
 export const CATEGORIES: { id: CategoryId; label: string }[] = [
   { id: "photo", label: "Photos" },
+  { id: "people", label: "People" },
   { id: "vehicle", label: "Vehicles" },
   { id: "building", label: "Buildings" },
   { id: "nature", label: "Nature" },
@@ -417,6 +418,18 @@ export const CATALOG: CatalogItem[] = [
       shape("depth", "Relief", 0.05, 1.2),
       shape("cutout", "Knockout", 0.55, 1, 0.01),
       shape("thickness", "Thickness", 0, 0.35),
+    ],
+  },
+  {
+    id: "avatar",
+    name: "Aviator",
+    category: "people",
+    blurb: "You, in 3D. Photo face, MT World dress, then drop into your house.",
+    defaults: { height: 1, build: 1, dress: 0 },
+    params: [
+      shape("height", "Height", 0.85, 1.25),
+      shape("build", "Build", 0.8, 1.25),
+      shape("dress", "Dress", 0, 6, 1),
     ],
   },
 ];
