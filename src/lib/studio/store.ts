@@ -17,7 +17,6 @@ import type {
   WorldSceneId,
 } from "./types";
 import { clampToScene, nextSlot, placeScaleFor, uid } from "./world";
-import { looksLikePersonShot } from "./cutout";
 
 const GALLERY_KEY = "lumina.gallery.v1";
 const WORLD_KEY = "lumina.world.v1";
@@ -562,17 +561,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       return;
     }
     if (state.mode === "world") {
-      if (looksLikePersonShot(shot.aspect)) {
-        const id = get().placePerson(shot.url, shot.name);
-        set({
-          photos,
-          activePhotoId: shot.id,
-          captureOpen: false,
-          selectedPlaceId: id,
-        });
-        return;
-      }
-      const id = get().placeKind("photo-relief", shot.url);
+      const id = get().placePerson(shot.url, shot.name);
       set({
         photos,
         activePhotoId: shot.id,
@@ -625,11 +614,7 @@ export const useStudio = create<StudioState>((set, get) => ({
     const shot = get().photos.find((p) => p.id === id);
     if (!shot) return;
     if (get().mode === "world") {
-      if (looksLikePersonShot(shot.aspect)) {
-        get().placePerson(shot.url, shot.name);
-      } else {
-        get().placeKind("photo-relief", shot.url);
-      }
+      get().placePerson(shot.url, shot.name);
       set({ activePhotoId: id, galleryOpen: false });
       return;
     }
@@ -783,7 +768,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       accentColor: finish.accent,
       metalness: finish.metalness,
       roughness: finish.roughness,
-      params: { ...item.defaults, dress: 0 },
+      params: { ...item.defaults, dress: 0, cutout: 1 },
       photoUrl,
     };
     const worldPlaces = [...state.worldPlaces, place];

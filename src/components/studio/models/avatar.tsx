@@ -1,6 +1,6 @@
-import { useEffect, useState } from "react";
-import { SRGBColorSpace, Texture } from "three";
-import { useThree } from "@react-three/fiber";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { SRGBColorSpace, Texture, type Group } from "three";
+import { useFrame, useThree } from "@react-three/fiber";
 import type { MeshViewProps } from "@/lib/studio/types";
 import { n, Surface } from "./shared";
 
@@ -93,26 +93,78 @@ export function AvatarMesh({
   const isToken = dress === 6;
   const skin = isToken ? clothes.skin : "#e7cbb6";
   const clothMetal = isCape ? 0.72 : metalness * 0.2;
+  const hipL = useRef<Group>(null);
+  const hipR = useRef<Group>(null);
+  const kneeL = useRef<Group>(null);
+  const kneeR = useRef<Group>(null);
+  const armL = useRef<Group>(null);
+  const armR = useRef<Group>(null);
+  const root = useRef<Group>(null);
+  const phase = useMemo(() => Math.random() * Math.PI * 2, []);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime + phase;
+    const s = Math.sin(t * 7.1);
+    if (root.current) root.current.position.y = Math.abs(s) * 0.035;
+    if (hipL.current) {
+      hipL.current.rotation.x = s * 0.7;
+      hipL.current.rotation.z = 0.05;
+    }
+    if (hipR.current) {
+      hipR.current.rotation.x = -s * 0.7;
+      hipR.current.rotation.z = -0.05;
+    }
+    if (kneeL.current) kneeL.current.rotation.x = Math.max(0, -s) * 0.9;
+    if (kneeR.current) kneeR.current.rotation.x = Math.max(0, s) * 0.9;
+    if (armL.current) {
+      armL.current.rotation.x = -s * 0.55;
+      armL.current.rotation.z = 0.12;
+    }
+    if (armR.current) {
+      armR.current.rotation.x = s * 0.55;
+      armR.current.rotation.z = -0.12;
+    }
+  });
+
+  const thighLen = 0.26 * h;
+  const shinLen = 0.24 * h;
+  const armLen = 0.34 * h;
 
   return (
-    <group scale={scale}>
-      <mesh position={[-0.11 * build, 0.42 * h, 0]} castShadow name="LegL">
-        <capsuleGeometry args={[0.07 * build, 0.48 * h, 6, 10]} />
-        <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
-      </mesh>
-      <mesh position={[0.11 * build, 0.42 * h, 0]} castShadow name="LegR">
-        <capsuleGeometry args={[0.07 * build, 0.48 * h, 6, 10]} />
-        <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
-      </mesh>
-      <mesh position={[-0.11 * build, 0.07, 0.03]} castShadow name="ShoeL">
-        <boxGeometry args={[0.14 * build, 0.09, 0.22]} />
-        <Surface color={clothes.boot} metalness={0.12} roughness={0.65} />
-      </mesh>
-      <mesh position={[0.11 * build, 0.07, 0.03]} castShadow name="ShoeR">
-        <boxGeometry args={[0.14 * build, 0.09, 0.22]} />
-        <Surface color={clothes.boot} metalness={0.12} roughness={0.65} />
-      </mesh>
-      <mesh position={[0, 0.92 * h, 0]} castShadow name="Torso">
+    <group ref={root} scale={scale}>
+      <group ref={hipL} position={[-0.11 * build, 0.68 * h, 0]}>
+        <mesh position={[0, -thighLen / 2, 0]} castShadow>
+          <capsuleGeometry args={[0.07 * build, thighLen * 0.72, 6, 10]} />
+          <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
+        </mesh>
+        <group ref={kneeL} position={[0, -thighLen, 0]}>
+          <mesh position={[0, -shinLen / 2, 0]} castShadow>
+            <capsuleGeometry args={[0.065 * build, shinLen * 0.7, 6, 10]} />
+            <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, -shinLen + 0.02, 0.04]} castShadow>
+            <boxGeometry args={[0.14 * build, 0.09, 0.22]} />
+            <Surface color={clothes.boot} metalness={0.12} roughness={0.65} />
+          </mesh>
+        </group>
+      </group>
+      <group ref={hipR} position={[0.11 * build, 0.68 * h, 0]}>
+        <mesh position={[0, -thighLen / 2, 0]} castShadow>
+          <capsuleGeometry args={[0.07 * build, thighLen * 0.72, 6, 10]} />
+          <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
+        </mesh>
+        <group ref={kneeR} position={[0, -thighLen, 0]}>
+          <mesh position={[0, -shinLen / 2, 0]} castShadow>
+            <capsuleGeometry args={[0.065 * build, shinLen * 0.7, 6, 10]} />
+            <Surface color={clothes.pants} metalness={clothMetal} roughness={0.7} />
+          </mesh>
+          <mesh position={[0, -shinLen + 0.02, 0.04]} castShadow>
+            <boxGeometry args={[0.14 * build, 0.09, 0.22]} />
+            <Surface color={clothes.boot} metalness={0.12} roughness={0.65} />
+          </mesh>
+        </group>
+      </group>
+      <mesh position={[0, 0.92 * h, 0]} castShadow>
         <capsuleGeometry args={[0.16 * build, 0.32 * h, 6, 12]} />
         <Surface
           color={clothes.top}
@@ -144,22 +196,26 @@ export function AvatarMesh({
           <Surface color="#c9a227" metalness={0.85} roughness={0.22} />
         </mesh>
       )}
-      <mesh position={[-0.26 * build, 0.88 * h, 0]} castShadow name="ArmL">
-        <capsuleGeometry args={[0.055 * build, 0.34 * h, 5, 10]} />
-        <Surface
-          color={isAviator ? "#4a2f26" : clothes.top}
-          metalness={0.1}
-          roughness={0.65}
-        />
-      </mesh>
-      <mesh position={[0.26 * build, 0.88 * h, 0]} castShadow name="ArmR">
-        <capsuleGeometry args={[0.055 * build, 0.34 * h, 5, 10]} />
-        <Surface
-          color={isAviator ? "#4a2f26" : clothes.top}
-          metalness={0.1}
-          roughness={0.65}
-        />
-      </mesh>
+      <group ref={armL} position={[-0.2 * build, 1.08 * h, 0]}>
+        <mesh position={[0, -armLen / 2, 0]} castShadow>
+          <capsuleGeometry args={[0.055 * build, armLen * 0.72, 5, 10]} />
+          <Surface
+            color={isAviator ? "#4a2f26" : clothes.top}
+            metalness={0.1}
+            roughness={0.65}
+          />
+        </mesh>
+      </group>
+      <group ref={armR} position={[0.2 * build, 1.08 * h, 0]}>
+        <mesh position={[0, -armLen / 2, 0]} castShadow>
+          <capsuleGeometry args={[0.055 * build, armLen * 0.72, 5, 10]} />
+          <Surface
+            color={isAviator ? "#4a2f26" : clothes.top}
+            metalness={0.1}
+            roughness={0.65}
+          />
+        </mesh>
+      </group>
       <mesh position={[0, 1.18 * h, 0]} castShadow name="Neck">
         <cylinderGeometry args={[0.055, 0.065, 0.1 * h, 10]} />
         <Surface color={skin} metalness={0.05} roughness={0.7} />
