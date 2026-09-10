@@ -186,88 +186,7 @@ export function Inspector() {
         <div className="flex flex-col gap-5 px-4 py-4">
           {mode === "world" && selected && picture && (
             <div className="flex flex-col gap-3">
-              <div className="overflow-hidden rounded-lg bg-elevated">
-                <img
-                  src={selected.photoUrl}
-                  alt=""
-                  className="mx-auto max-h-36 object-contain"
-                  crossOrigin="anonymous"
-                />
-              </div>
               <p className="text-sm text-fg">{selected.name}</p>
-              <Button
-                type="button"
-                className="w-full"
-                onClick={() => useStudio.getState().setEditingCutout(selected.id, true)}
-              >
-                Lift subject
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => useStudio.getState().setEditingCutout(selected.id)}
-              >
-                Cut it out myself
-              </Button>
-              <label className="relative flex h-11 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-elevated text-sm font-medium text-fg">
-                Replace photo
-                <input
-                  type="file"
-                  accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  onChange={async (e) => {
-                    const file = e.currentTarget.files?.[0];
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    try {
-                      const shot = await fileToShot(file);
-                      useStudio.getState().replacePlacePhoto(selected.id, shot.url);
-                      useStudio.getState().setEditingCutout(selected.id);
-                    } catch {
-                      toast.error("Could not read that photo");
-                    }
-                  }}
-                />
-              </label>
-              {selected.kind === "photo-relief" && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => convertToPerson(selected.id)}
-                >
-                  Auto cut-out
-                </Button>
-              )}
-              <Field
-                label="Height"
-                value={selected.params.height ?? 1}
-                min={0.35}
-                max={1.6}
-                step={0.05}
-                onChange={(value) =>
-                  updatePlace(selected.id, {
-                    params: { ...selected.params, height: value },
-                  })
-                }
-              />
-              <Field
-                label="Size"
-                value={selected.scale}
-                min={0.4}
-                max={2.2}
-                step={0.05}
-                onChange={(value) => updatePlace(selected.id, { scale: value })}
-              />
-              <Field
-                label="Turn"
-                value={selected.rotY}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.05}
-                onChange={(value) => updatePlace(selected.id, { rotY: value })}
-              />
               <div>
                 <p className="mb-2 text-xs font-medium uppercase tracking-wider text-subtle">
                   Walk
@@ -346,6 +265,79 @@ export function Inspector() {
                   </div>
                 )}
               </div>
+              <Field
+                label="Height"
+                value={selected.params.height ?? 1}
+                min={0.35}
+                max={1.6}
+                step={0.05}
+                onChange={(value) =>
+                  updatePlace(selected.id, {
+                    params: { ...selected.params, height: value },
+                  })
+                }
+              />
+              <Field
+                label="Size"
+                value={selected.scale}
+                min={0.4}
+                max={2.2}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { scale: value })}
+              />
+              <Field
+                label="Turn"
+                value={selected.rotY}
+                min={-Math.PI}
+                max={Math.PI}
+                step={0.05}
+                onChange={(value) => updatePlace(selected.id, { rotY: value })}
+              />
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => useStudio.getState().setEditingCutout(selected.id, true)}
+              >
+                Lift subject
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
+                onClick={() => useStudio.getState().setEditingCutout(selected.id)}
+              >
+                Cut it out myself
+              </Button>
+              <label className="relative flex h-11 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-elevated text-sm font-medium text-fg">
+                Replace photo
+                <input
+                  type="file"
+                  accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  onChange={async (e) => {
+                    const file = e.currentTarget.files?.[0];
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    try {
+                      const shot = await fileToShot(file);
+                      useStudio.getState().replacePlacePhoto(selected.id, shot.url);
+                      useStudio.getState().setEditingCutout(selected.id);
+                    } catch {
+                      toast.error("Could not read that photo");
+                    }
+                  }}
+                />
+              </label>
+              {selected.kind === "photo-relief" && (
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full"
+                  onClick={() => convertToPerson(selected.id)}
+                >
+                  Auto cut-out
+                </Button>
+              )}
               <Button
                 type="button"
                 variant="secondary"
