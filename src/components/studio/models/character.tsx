@@ -106,7 +106,7 @@ function PhotoWalker({
     g.position.y = land * motion.bob;
     g.rotation.y = step * motion.sway * 0.45;
     g.rotation.z = step * motion.sway * 0.25;
-    const squash = 1 - land * 0.03 * motion.bounce;
+    const squash = 1 - land * 0.03 * (motion.bob > 0 ? 1 : 0);
     g.scale.set(scale * (2 - squash), scale * squash, scale);
   });
 
