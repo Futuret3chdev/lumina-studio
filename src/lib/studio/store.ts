@@ -17,6 +17,7 @@ import type {
   WorldSceneId,
 } from "./types";
 import { clampToScene, nextSlot, placeScaleFor, uid } from "./world";
+import { looksLikePersonShot } from "./cutout";
 
 const GALLERY_KEY = "lumina.gallery.v1";
 const WORLD_KEY = "lumina.world.v1";
@@ -135,6 +136,7 @@ export type StudioState = {
   setMode: (mode: AppMode) => void;
   setWorldScene: (scene: WorldSceneId) => void;
   placeKind: (kind: AssetKind, photoUrl?: string) => string;
+  placePerson: (photoUrl: string, name?: string) => string;
   placeUpload: (name: string, glbUrl: string) => string;
   selectPlace: (id: string | null) => void;
   movePlace: (id: string, x: number, z: number) => void;
@@ -560,6 +562,16 @@ export const useStudio = create<StudioState>((set, get) => ({
       return;
     }
     if (state.mode === "world") {
+      if (looksLikePersonShot(shot.aspect)) {
+        const id = get().placePerson(shot.url, shot.name);
+        set({
+          photos,
+          activePhotoId: shot.id,
+          captureOpen: false,
+          selectedPlaceId: id,
+        });
+        return;
+      }
       const id = get().placeKind("photo-relief", shot.url);
       set({
         photos,
@@ -613,7 +625,11 @@ export const useStudio = create<StudioState>((set, get) => ({
     const shot = get().photos.find((p) => p.id === id);
     if (!shot) return;
     if (get().mode === "world") {
-      get().placeKind("photo-relief", shot.url);
+      if (looksLikePersonShot(shot.aspect)) {
+        get().placePerson(shot.url, shot.name);
+      } else {
+        get().placeKind("photo-relief", shot.url);
+      }
       set({ activePhotoId: id, galleryOpen: false });
       return;
     }
@@ -747,6 +763,42 @@ export const useStudio = create<StudioState>((set, get) => ({
       worldPlaces,
       selectedPlaceId: place.id,
       mode: "world",
+    });
+    return place.id;
+  },
+  placePerson: (photoUrl, name = "Person") => {
+    const state = get();
+    const item = CATALOG_BY_ID.avatar;
+    const finish = KIND_FINISH.avatar!;
+    const slot = nextSlot(state.worldPlaces, state.worldScene);
+    const place: WorldPlace = {
+      id: uid("who"),
+      kind: "avatar",
+      name,
+      x: slot.x,
+      z: slot.z,
+      rotY: 0,
+      scale: 1,
+      bodyColor: finish.body,
+      accentColor: finish.accent,
+      metalness: finish.metalness,
+      roughness: finish.roughness,
+      params: { ...item.defaults, dress: 0 },
+      photoUrl,
+    };
+    const worldPlaces = [...state.worldPlaces, place];
+    writeWorld(state.worldScene, worldPlaces);
+    set({
+      worldPlaces,
+      selectedPlaceId: place.id,
+      mode: "world",
+      kind: "avatar",
+      category: "people",
+      params: place.params,
+      bodyColor: place.bodyColor,
+      accentColor: place.accentColor,
+      autoRotate: false,
+      showPlatform: false,
     });
     return place.id;
   },

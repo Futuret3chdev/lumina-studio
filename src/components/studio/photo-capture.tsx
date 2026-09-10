@@ -36,7 +36,7 @@ export async function ingestPhotoFile(
     if (next === "avatar") {
       toast.success("That's you — you're in the house. Dress, then place models.");
     } else if (mode === "world") {
-      toast.success("Photo is in the world — tap the floor to move it");
+      toast.success("They're in the world as a character — tap the floor to move them");
     } else {
       toast.success("Photo is on the stage — drag to orbit");
     }

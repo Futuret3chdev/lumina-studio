@@ -55,8 +55,8 @@ function usePlaceOrStage() {
 }
 
 function wearLook(name: string, url: string) {
-  useStudio.getState().placeKind("avatar", url);
-  toast.success(`${name} is in the house — pick a dress`);
+  useStudio.getState().placePerson(url, name);
+  toast.success(`${name} is in the world — walking, no backdrop`);
 }
 
 export function CatalogRail() {
