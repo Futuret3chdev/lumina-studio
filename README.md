@@ -6,6 +6,8 @@ Cinematic 3D asset studio in the browser. Stage cars, houses, trees, furniture, 
 
 ## Try it
 
+- **Take a photo** or upload one — Lumina sculpts it into a 3D relief
+- Toggle **Wrap onto model** to skin a car, house, or prop with that shot
 - Drag to orbit, scroll to zoom
 - Pick an asset from the left rail
 - Tune color, metal, roughness, and shape

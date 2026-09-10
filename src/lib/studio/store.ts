@@ -5,6 +5,7 @@ import {
   CATALOG,
   CATALOG_BY_ID,
 } from "./catalog";
+import type { PhotoShot } from "./photo";
 import type {
   AssetKind,
   CameraPreset,
@@ -41,6 +42,8 @@ function writeGallery(items: SavedAsset[]) {
   }
 }
 
+export type PhotoImportMode = "sculpt" | "wrap";
+
 export type StudioState = {
   kind: AssetKind;
   category: CategoryId;
@@ -60,6 +63,11 @@ export type StudioState = {
   cameraTick: number;
   gallery: SavedAsset[];
   galleryOpen: boolean;
+  photos: PhotoShot[];
+  activePhotoId: string | null;
+  wrapPhoto: boolean;
+  previousKind: AssetKind;
+  captureOpen: boolean;
   setKind: (kind: AssetKind) => void;
   setCategory: (category: CategoryId) => void;
   setParam: (key: string, value: number) => void;
@@ -82,6 +90,10 @@ export type StudioState = {
   removeSaved: (id: string) => void;
   restoreSaved: (asset: SavedAsset) => void;
   setGalleryOpen: (open: boolean) => void;
+  setCaptureOpen: (open: boolean) => void;
+  importShot: (shot: PhotoShot, mode?: PhotoImportMode) => void;
+  selectPhoto: (id: string) => void;
+  setWrapPhoto: (value: boolean) => void;
 };
 
 const KIND_FINISH: Partial<
@@ -270,9 +282,19 @@ const KIND_FINISH: Partial<
     metalness: 0.15,
     roughness: 0.55,
   },
+  "photo-relief": {
+    body: "#f4f4f5",
+    accent: "#27272a",
+    metalness: 0.12,
+    roughness: 0.52,
+  },
 };
 
 const initial = CATALOG_BY_ID["sports-car"];
+
+function rememberPhoto(photos: PhotoShot[], shot: PhotoShot) {
+  return [shot, ...photos.filter((item) => item.id !== shot.id)].slice(0, 12);
+}
 
 export const useStudio = create<StudioState>((set, get) => ({
   kind: initial.id,
@@ -293,13 +315,21 @@ export const useStudio = create<StudioState>((set, get) => ({
   cameraTick: 0,
   gallery: [],
   galleryOpen: false,
+  photos: [],
+  activePhotoId: null,
+  wrapPhoto: false,
+  previousKind: "sports-car",
+  captureOpen: false,
   setKind: (kind) => {
     const item = CATALOG_BY_ID[kind];
     const finish = KIND_FINISH[kind];
+    const current = get().kind;
     set({
+      previousKind: current === "photo-relief" ? get().previousKind : current,
       kind,
       category: item.category,
       params: { ...item.defaults },
+      wrapPhoto: kind === "photo-relief" ? false : get().wrapPhoto,
       ...(finish
         ? {
             bodyColor: finish.body,
@@ -346,7 +376,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     });
   },
   randomizeItem: () => {
-    const item = CATALOG[Math.floor(Math.random() * CATALOG.length)]!;
+    const pool = CATALOG.filter((item) => item.id !== "photo-relief");
+    const item = pool[Math.floor(Math.random() * pool.length)]!;
     get().setKind(item.id);
     get().randomizeLook();
   },
@@ -354,6 +385,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   saveCurrent: (thumbnail) => {
     const state = get();
     const item = CATALOG_BY_ID[state.kind];
+    const active = state.photos.find((p) => p.id === state.activePhotoId);
     const saved: SavedAsset = {
       id:
         typeof crypto !== "undefined" && "randomUUID" in crypto
@@ -370,6 +402,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       env: state.env,
       thumbnail,
       createdAt: Date.now(),
+      photoData: active?.url ?? active?.thumb,
     };
     const gallery = [saved, ...state.gallery].slice(0, 24);
     writeGallery(gallery);
@@ -394,7 +427,86 @@ export const useStudio = create<StudioState>((set, get) => ({
       scale: asset.scale,
       env: asset.env,
       galleryOpen: false,
+      wrapPhoto: Boolean(asset.photoData) && asset.kind !== "photo-relief",
     });
+    if (asset.photoData) {
+      const shot: PhotoShot = {
+        id: asset.id,
+        name: asset.name,
+        url: asset.photoData,
+        thumb: asset.photoData,
+        createdAt: asset.createdAt,
+        aspect: 1,
+      };
+      set({
+        photos: rememberPhoto(get().photos, shot),
+        activePhotoId: shot.id,
+      });
+    }
   },
   setGalleryOpen: (galleryOpen) => set({ galleryOpen }),
+  setCaptureOpen: (captureOpen) => set({ captureOpen }),
+  importShot: (shot, mode = "sculpt") => {
+    const state = get();
+    const photos = rememberPhoto(state.photos, shot);
+    const canWrap = state.kind !== "photo-relief";
+    if (mode === "wrap" && canWrap) {
+      set({
+        photos,
+        activePhotoId: shot.id,
+        captureOpen: false,
+        wrapPhoto: true,
+        galleryOpen: false,
+        autoRotate: true,
+        cameraPreset: "hero",
+        cameraTick: state.cameraTick + 1,
+      });
+      return;
+    }
+    const item = CATALOG_BY_ID["photo-relief"];
+    const finish = KIND_FINISH["photo-relief"] ?? {
+      body: "#f4f4f5",
+      accent: "#27272a",
+      metalness: 0.12,
+      roughness: 0.52,
+    };
+    set({
+      photos,
+      activePhotoId: shot.id,
+      captureOpen: false,
+      galleryOpen: false,
+      wrapPhoto: false,
+      previousKind: state.kind === "photo-relief" ? state.previousKind : state.kind,
+      kind: "photo-relief",
+      category: "photo",
+      params: { ...item.defaults },
+      bodyColor: finish.body,
+      accentColor: finish.accent,
+      metalness: finish.metalness,
+      roughness: finish.roughness,
+      autoRotate: true,
+      cameraPreset: "hero",
+      cameraTick: state.cameraTick + 1,
+    });
+  },
+  selectPhoto: (id) => {
+    const shot = get().photos.find((p) => p.id === id);
+    if (!shot) return;
+    get().setKind("photo-relief");
+    set({ activePhotoId: id, wrapPhoto: false, galleryOpen: false });
+  },
+  setWrapPhoto: (wrapPhoto) => {
+    const state = get();
+    if (wrapPhoto && state.kind === "photo-relief") {
+      get().setKind(state.previousKind);
+      set({ wrapPhoto: true });
+      return;
+    }
+    if (!wrapPhoto && state.kind !== "photo-relief" && state.activePhotoId) {
+      get().setKind("photo-relief");
+      set({ wrapPhoto: false });
+      return;
+    }
+    set({ wrapPhoto });
+  },
 }));

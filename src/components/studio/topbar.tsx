@@ -11,6 +11,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CATALOG_BY_ID } from "@/lib/studio/catalog";
 import { capturePng, exportGlb, exportPng } from "@/lib/studio/export";
+import { openNativeCamera, prefersNativeCamera } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
 import type { CameraPreset } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
@@ -95,6 +96,17 @@ export function Topbar() {
       <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-surface p-1 shadow-[var(--shadow-border)]">
         <Button
           type="button"
+          size="sm"
+          onClick={() => {
+            if (prefersNativeCamera()) openNativeCamera();
+            else useStudio.getState().setCaptureOpen(true);
+          }}
+        >
+          <Camera className="size-4" />
+          <span className="hidden sm:inline">Photo</span>
+        </Button>
+        <Button
+          type="button"
           variant="ghost"
           size="icon-sm"
           aria-label="Randomize look"
@@ -120,7 +132,7 @@ export function Topbar() {
           aria-label="Hero camera"
           onClick={() => setCameraPreset("hero")}
         >
-          <Camera className="size-4" />
+          <Aperture className="size-4" />
         </Button>
         <Button
           type="button"

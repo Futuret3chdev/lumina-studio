@@ -6,6 +6,7 @@ import { useStudio } from "@/lib/studio/store";
 import { CatalogRail, MobileCatalog } from "./catalog-rail";
 import { GalleryPanel } from "./gallery-panel";
 import { Inspector } from "./inspector";
+import { PhotoCapture } from "./photo-capture";
 import { Topbar } from "./topbar";
 import Viewport from "./viewport";
 
@@ -45,6 +46,7 @@ export function StudioApp() {
       </div>
 
       <Topbar />
+      <PhotoCapture />
 
       <div className="pointer-events-none absolute bottom-3 left-3 top-20 hidden md:flex lg:bottom-4 lg:left-4">
         <CatalogRail />

@@ -16,6 +16,7 @@ const shape = (
 });
 
 export const CATEGORIES: { id: CategoryId; label: string }[] = [
+  { id: "photo", label: "Photos" },
   { id: "vehicle", label: "Vehicles" },
   { id: "building", label: "Buildings" },
   { id: "nature", label: "Nature" },
@@ -404,6 +405,18 @@ export const CATALOG: CatalogItem[] = [
     params: [
       shape("sizeX", "Radius", 0.5, 1.5),
       shape("sizeY", "Length", 0.5, 2),
+    ],
+  },
+  {
+    id: "photo-relief",
+    name: "Photo sculpt",
+    category: "photo",
+    blurb: "A photograph lifted into a 3D relief you can light and export.",
+    defaults: { depth: 0.38, cutout: 1, thickness: 0.1 },
+    params: [
+      shape("depth", "Relief", 0.05, 1.2),
+      shape("cutout", "Knockout", 0.55, 1, 0.01),
+      shape("thickness", "Thickness", 0, 0.35),
     ],
   },
 ];

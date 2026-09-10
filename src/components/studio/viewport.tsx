@@ -10,6 +10,7 @@ import { PCFShadowMap, type Group } from "three";
 import { studioBridge } from "@/lib/studio/bridge";
 import { useStudio } from "@/lib/studio/store";
 import { AssetMesh } from "./models/asset-mesh";
+import { PhotoSkin } from "./models/photo";
 
 const CAMERA_POS: Record<string, [number, number, number]> = {
   hero: [3.9, 2.05, 4.5],
@@ -96,19 +97,34 @@ function StagedAsset() {
   const metalness = useStudio((s) => s.metalness);
   const roughness = useStudio((s) => s.roughness);
   const scale = useStudio((s) => s.scale);
+  const photos = useStudio((s) => s.photos);
+  const activePhotoId = useStudio((s) => s.activePhotoId);
+  const wrapPhoto = useStudio((s) => s.wrapPhoto);
+  const photoUrl = photos.find((p) => p.id === activePhotoId)?.url ?? null;
+
+  const mesh = (
+    <AssetMesh
+      kind={kind}
+      params={params}
+      bodyColor={bodyColor}
+      accentColor={accentColor}
+      metalness={metalness}
+      roughness={roughness}
+      scale={scale}
+      photoUrl={photoUrl}
+    />
+  );
 
   return (
     <group ref={groupRef}>
       <RegisterBridge groupRef={groupRef} />
-      <AssetMesh
-        kind={kind}
-        params={params}
-        bodyColor={bodyColor}
-        accentColor={accentColor}
-        metalness={metalness}
-        roughness={roughness}
-        scale={scale}
-      />
+      {wrapPhoto && photoUrl && kind !== "photo-relief" ? (
+        <PhotoSkin url={photoUrl} key={`${kind}-${photoUrl}`}>
+          {mesh}
+        </PhotoSkin>
+      ) : (
+        mesh
+      )}
     </group>
   );
 }
@@ -133,7 +149,9 @@ function SceneContents() {
         />
       </Suspense>
       <CameraRig />
-      <StagedAsset />
+      <Suspense fallback={null}>
+        <StagedAsset />
+      </Suspense>
       {showPlatform && (
         <mesh
           rotation={[-Math.PI / 2, 0, 0]}
@@ -185,12 +203,11 @@ function SceneContents() {
 }
 
 export default function Viewport() {
-  const autoRotate = useStudio((s) => s.autoRotate);
   return (
     <Canvas
       shadows
       dpr={[1, 2]}
-      frameloop={autoRotate ? "always" : "demand"}
+      frameloop="always"
       gl={{
         antialias: true,
         preserveDrawingBuffer: true,

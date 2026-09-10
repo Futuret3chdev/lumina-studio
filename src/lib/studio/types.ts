@@ -4,7 +4,8 @@ export type CategoryId =
   | "nature"
   | "furniture"
   | "prop"
-  | "primitive";
+  | "primitive"
+  | "photo";
 
 export type AssetKind =
   | "sports-car"
@@ -36,7 +37,8 @@ export type AssetKind =
   | "sphere"
   | "cylinder"
   | "torus"
-  | "capsule";
+  | "capsule"
+  | "photo-relief";
 
 export type EnvPreset =
   | "studio"
@@ -81,6 +83,7 @@ export type SavedAsset = {
   env: EnvPreset;
   thumbnail: string;
   createdAt: number;
+  photoData?: string;
 };
 
 export type MeshViewProps = {
@@ -91,4 +94,5 @@ export type MeshViewProps = {
   metalness: number;
   roughness: number;
   scale: number;
+  photoUrl?: string | null;
 };

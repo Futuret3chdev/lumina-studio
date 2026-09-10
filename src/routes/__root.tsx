@@ -19,7 +19,7 @@ export const Route = createRootRoute({
       {
         name: "description",
         content:
-          "Stage cars, houses, trees, and props in a cinematic 3D studio. Export PNG renders or GLB models for your game.",
+          "Stage cars, houses, trees, and photos in a cinematic 3D studio. Export PNG renders or GLB models for your game.",
       },
       { name: "theme-color", content: "#0a0a0b" },
     ],

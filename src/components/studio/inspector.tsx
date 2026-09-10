@@ -134,7 +134,12 @@ export function Inspector() {
   const setShowGrid = useStudio((s) => s.setShowGrid);
   const setShowPlatform = useStudio((s) => s.setShowPlatform);
   const setLightIntensity = useStudio((s) => s.setLightIntensity);
+  const wrapPhoto = useStudio((s) => s.wrapPhoto);
+  const activePhotoId = useStudio((s) => s.activePhotoId);
+  const setWrapPhoto = useStudio((s) => s.setWrapPhoto);
   const item = CATALOG_BY_ID[kind];
+  const hasPhoto = Boolean(activePhotoId);
+  const isPhoto = kind === "photo-relief";
 
   return (
     <aside className="pointer-events-auto flex h-full w-full flex-col bg-surface lg:w-72 lg:rounded-xl lg:shadow-[var(--shadow-border)]">
@@ -145,14 +150,23 @@ export function Inspector() {
       <Separator />
       <ScrollArea className="min-h-0 flex-1">
         <div className="flex flex-col gap-5 px-4 py-4">
+          {hasPhoto && (
+            <ToggleRow
+              label="Wrap onto model"
+              checked={wrapPhoto && !isPhoto}
+              onCheckedChange={setWrapPhoto}
+            />
+          )}
+          {!isPhoto && (
+            <Swatches
+              label="Surface"
+              value={bodyColor}
+              colors={BODY_SWATCHES}
+              onChange={setBodyColor}
+            />
+          )}
           <Swatches
-            label="Surface"
-            value={bodyColor}
-            colors={BODY_SWATCHES}
-            onChange={setBodyColor}
-          />
-          <Swatches
-            label="Accent"
+            label={isPhoto ? "Frame" : "Accent"}
             value={accentColor}
             colors={ACCENT_SWATCHES}
             onChange={setAccentColor}
