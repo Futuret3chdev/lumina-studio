@@ -1,4 +1,5 @@
 import { ACCENT_SWATCHES, BODY_SWATCHES, CATALOG_BY_ID, ENV_PRESETS } from "@/lib/studio/catalog";
+import { fileToShot } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
 import { OUTFITS, WORLD_SCENES } from "@/lib/studio/world";
 import { cn } from "@/lib/utils";
@@ -7,6 +8,7 @@ import { Slider } from "@/components/ui/slider";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { Button } from "@/components/ui/button";
+import { toast } from "sonner";
 
 function Swatches({
   label,
@@ -199,6 +201,26 @@ export function Inspector() {
               >
                 Cut it out myself
               </Button>
+              <label className="relative flex h-11 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-elevated text-sm font-medium text-fg">
+                Replace photo
+                <input
+                  type="file"
+                  accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+                  className="absolute inset-0 cursor-pointer opacity-0"
+                  onChange={async (e) => {
+                    const file = e.currentTarget.files?.[0];
+                    e.currentTarget.value = "";
+                    if (!file) return;
+                    try {
+                      const shot = await fileToShot(file);
+                      useStudio.getState().replacePlacePhoto(selected.id, shot.url);
+                      useStudio.getState().setEditingCutout(selected.id);
+                    } catch {
+                      toast.error("Could not read that photo");
+                    }
+                  }}
+                />
+              </label>
               {selected.kind === "photo-relief" && (
                 <Button
                   type="button"

@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
-import { Eraser, Paintbrush, Sparkles, Undo2, X } from "lucide-react";
+import { Eraser, ImagePlus, Paintbrush, RotateCcw, Sparkles, Undo2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
+import { fileToShot } from "@/lib/studio/photo";
 import { cutoutPerson } from "@/lib/studio/cutout";
 import { useStudio } from "@/lib/studio/store";
 
@@ -17,14 +18,22 @@ function loadImg(src: string) {
   });
 }
 
-function pointerOn(
-  canvas: HTMLCanvasElement,
-  e: React.PointerEvent,
-) {
+function pointerOn(canvas: HTMLCanvasElement, e: React.PointerEvent) {
   const rect = canvas.getBoundingClientRect();
-  const x = ((e.clientX - rect.left) / rect.width) * canvas.width;
-  const y = ((e.clientY - rect.top) / rect.height) * canvas.height;
+  const x = ((e.clientX - rect.left) / Math.max(1, rect.width)) * canvas.width;
+  const y = ((e.clientY - rect.top) / Math.max(1, rect.height)) * canvas.height;
   return { x, y };
+}
+
+function hasHoles(canvas: HTMLCanvasElement) {
+  const ctx = canvas.getContext("2d");
+  if (!ctx) return false;
+  const { data } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+  let clear = 0;
+  for (let i = 3; i < data.length; i += 4) {
+    if ((data[i] ?? 255) < 16) clear += 1;
+  }
+  return clear > (data.length / 4) * 0.08;
 }
 
 export function CutoutEditor() {
@@ -38,9 +47,11 @@ export function CutoutEditor() {
   const moved = useRef(false);
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const undo = useRef<ImageData[]>([]);
-  const [tool, setTool] = useState<Tool>("erase");
-  const [size, setSize] = useState(42);
+  const fileRef = useRef<HTMLInputElement>(null);
+  const [tool, setTool] = useState<Tool>("keep");
+  const [size, setSize] = useState(48);
   const [ready, setReady] = useState(false);
+  const [lostOriginal, setLostOriginal] = useState(false);
 
   useEffect(() => {
     if (!place?.photoUrl) {
@@ -68,21 +79,14 @@ export function CutoutEditor() {
         if (!work) return;
         work.width = w;
         work.height = h;
-        work.style.width = "auto";
-        work.style.height = "auto";
         work.style.maxWidth = "100%";
         work.style.maxHeight = "100%";
         const wctx = work.getContext("2d");
         if (!wctx) return;
-        const auto = cutoutPerson(img, img.width, img.height);
-        if (auto) {
-          wctx.clearRect(0, 0, w, h);
-          const ox = Math.round((w - auto.canvas.width) / 2);
-          const oy = Math.round((h - auto.canvas.height) / 2);
-          wctx.drawImage(auto.canvas, ox, oy);
-        } else {
-          wctx.drawImage(orig, 0, 0);
-        }
+        wctx.clearRect(0, 0, w, h);
+        wctx.drawImage(orig, 0, 0);
+        const holed = hasHoles(orig);
+        setLostOriginal(holed && !place.photoSource);
         undo.current = [];
         setReady(true);
       } catch {
@@ -118,9 +122,8 @@ export function CutoutEditor() {
       ctx.strokeStyle = "#000";
     } else {
       ctx.globalCompositeOperation = "source-over";
-      ctx.strokeStyle = "#000";
       const pattern = ctx.createPattern(orig, "no-repeat");
-      if (pattern) ctx.strokeStyle = pattern as unknown as string;
+      ctx.strokeStyle = (pattern ?? "#000") as string;
     }
     ctx.beginPath();
     if (last.current) ctx.moveTo(last.current.x, last.current.y);
@@ -131,7 +134,7 @@ export function CutoutEditor() {
     last.current = p;
   }
 
-  function wand(e: React.PointerEvent<HTMLCanvasElement>) {
+  function erasePatch(e: React.PointerEvent<HTMLCanvasElement>) {
     const work = workRef.current;
     const ctx = work?.getContext("2d");
     if (!work || !ctx) return;
@@ -143,16 +146,15 @@ export function CutoutEditor() {
     const w = work.width;
     const h = work.height;
     const i0 = (y * w + x) * 4;
+    if ((d[i0 + 3] ?? 0) < 8) return;
     const tr = d[i0] ?? 0;
     const tg = d[i0 + 1] ?? 0;
     const tb = d[i0 + 2] ?? 0;
-    const ta = d[i0 + 3] ?? 0;
-    if (ta < 8) return;
     snapshot();
     const seen = new Uint8Array(w * h);
     const qx = [x];
     const qy = [y];
-    const tol = 36;
+    const tol = 38;
     let qh = 0;
     while (qh < qx.length) {
       const cx = qx[qh]!;
@@ -162,8 +164,7 @@ export function CutoutEditor() {
       if (seen[pidx]) continue;
       seen[pidx] = 1;
       const i = pidx * 4;
-      const a = d[i + 3] ?? 0;
-      if (a < 8) continue;
+      if ((d[i + 3] ?? 0) < 8) continue;
       const dr = (d[i] ?? 0) - tr;
       const dg = (d[i + 1] ?? 0) - tg;
       const db = (d[i + 2] ?? 0) - tb;
@@ -189,6 +190,67 @@ export function CutoutEditor() {
     ctx.putImageData(image, 0, 0);
   }
 
+  function fillFromOriginal(e: React.PointerEvent<HTMLCanvasElement>) {
+    const work = workRef.current;
+    const orig = origRef.current;
+    const ctx = work?.getContext("2d");
+    const octx = orig?.getContext("2d");
+    if (!work || !orig || !ctx || !octx) return;
+    const p = pointerOn(work, e);
+    const x = Math.max(0, Math.min(work.width - 1, Math.round(p.x)));
+    const y = Math.max(0, Math.min(work.height - 1, Math.round(p.y)));
+    const src = octx.getImageData(0, 0, orig.width, orig.height);
+    const dst = ctx.getImageData(0, 0, work.width, work.height);
+    const w = work.width;
+    const h = work.height;
+    const i0 = (y * w + x) * 4;
+    const tr = src.data[i0] ?? 0;
+    const tg = src.data[i0 + 1] ?? 0;
+    const tb = src.data[i0 + 2] ?? 0;
+    if ((src.data[i0 + 3] ?? 0) < 8) return;
+    snapshot();
+    const seen = new Uint8Array(w * h);
+    const qx = [x];
+    const qy = [y];
+    const tol = 42;
+    let qh = 0;
+    while (qh < qx.length) {
+      const cx = qx[qh]!;
+      const cy = qy[qh]!;
+      qh += 1;
+      const pidx = cy * w + cx;
+      if (seen[pidx]) continue;
+      seen[pidx] = 1;
+      const i = pidx * 4;
+      if ((src.data[i + 3] ?? 0) < 8) continue;
+      const dr = (src.data[i] ?? 0) - tr;
+      const dg = (src.data[i + 1] ?? 0) - tg;
+      const db = (src.data[i + 2] ?? 0) - tb;
+      if (dr * dr + dg * dg + db * db > tol * tol) continue;
+      dst.data[i] = src.data[i] ?? 0;
+      dst.data[i + 1] = src.data[i + 1] ?? 0;
+      dst.data[i + 2] = src.data[i + 2] ?? 0;
+      dst.data[i + 3] = src.data[i + 3] ?? 255;
+      if (cx > 0) {
+        qx.push(cx - 1);
+        qy.push(cy);
+      }
+      if (cx + 1 < w) {
+        qx.push(cx + 1);
+        qy.push(cy);
+      }
+      if (cy > 0) {
+        qx.push(cx);
+        qy.push(cy - 1);
+      }
+      if (cy + 1 < h) {
+        qx.push(cx);
+        qy.push(cy + 1);
+      }
+    }
+    ctx.putImageData(dst, 0, 0);
+  }
+
   function onDown(e: React.PointerEvent<HTMLCanvasElement>) {
     e.preventDefault();
     (e.target as HTMLCanvasElement).setPointerCapture(e.pointerId);
@@ -212,9 +274,10 @@ export function CutoutEditor() {
   }
 
   function onUp(e: React.PointerEvent<HTMLCanvasElement>) {
-    if (drawing.current && !moved.current && tool === "erase") {
+    if (drawing.current && !moved.current) {
       onUndo();
-      wand(e);
+      if (tool === "erase") erasePatch(e);
+      else fillFromOriginal(e);
     }
     drawing.current = false;
     last.current = null;
@@ -227,6 +290,16 @@ export function CutoutEditor() {
     const snap = undo.current.pop();
     if (!work || !ctx || !snap) return;
     ctx.putImageData(snap, 0, 0);
+  }
+
+  function drawOriginal() {
+    const orig = origRef.current;
+    const work = workRef.current;
+    const ctx = work?.getContext("2d");
+    if (!orig || !work || !ctx) return;
+    snapshot();
+    ctx.clearRect(0, 0, work.width, work.height);
+    ctx.drawImage(orig, 0, 0);
   }
 
   function onAuto() {
@@ -243,6 +316,17 @@ export function CutoutEditor() {
       ctx.drawImage(auto.canvas, ox, oy);
     } else {
       ctx.drawImage(orig, 0, 0);
+    }
+  }
+
+  async function onReplace(file: File) {
+    try {
+      const shot = await fileToShot(file);
+      if (!place) return;
+      useStudio.getState().replacePlacePhoto(place.id, shot.url);
+      toast.success("New photo on this figure — cut it out again");
+    } catch {
+      toast.error("Could not read that photo");
     }
   }
 
@@ -276,7 +360,8 @@ export function CutoutEditor() {
         </div>
       </div>
       <p className="px-3 pb-2 text-xs text-muted">
-        Paint away the backdrop. Tap a colour to drop a whole patch. Only this picture changes.
+        Starts from the full photo. Erase the backdrop, or tap Keep on a hole to fill it back in.
+        {lostOriginal ? " This one lost its original — upload the photo again." : ""}
       </p>
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[linear-gradient(45deg,#2a2a30_25%,transparent_25%),linear-gradient(-45deg,#2a2a30_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#2a2a30_75%),linear-gradient(-45deg,transparent_75%,#2a2a30_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-2">
         <canvas
@@ -306,12 +391,38 @@ export function CutoutEditor() {
             onClick={() => setTool("keep")}
           >
             <Paintbrush className="size-4" />
-            Keep
+            Fill
           </Button>
+          <Button type="button" variant="ghost" className="flex-1" onClick={drawOriginal}>
+            <RotateCcw className="size-4" />
+            Original
+          </Button>
+        </div>
+        <div className="flex gap-2">
           <Button type="button" variant="ghost" className="flex-1" onClick={onAuto}>
             <Sparkles className="size-4" />
             Auto
           </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            className="flex-1"
+            onClick={() => fileRef.current?.click()}
+          >
+            <ImagePlus className="size-4" />
+            New photo
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.currentTarget.files?.[0];
+              e.currentTarget.value = "";
+              if (file) void onReplace(file);
+            }}
+          />
         </div>
         <label className="flex items-center gap-3 text-xs text-muted">
           Brush
@@ -327,9 +438,6 @@ export function CutoutEditor() {
         <Button type="button" className="w-full" disabled={!ready} onClick={onDone}>
           Use this cut-out
         </Button>
-        <p className="text-center text-xs text-muted">
-          Tap a backdrop colour to knock a whole area out. Paint to tidy edges.
-        </p>
       </div>
     </div>
   );

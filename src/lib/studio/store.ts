@@ -165,6 +165,7 @@ export type StudioState = {
   convertToPerson: (id: string) => void;
   setEditingCutout: (id: string | null) => void;
   applyCutout: (id: string, dataUrl: string) => void;
+  replacePlacePhoto: (id: string, dataUrl: string) => void;
   removePlace: (id: string) => void;
 };
 
@@ -925,7 +926,7 @@ export const useStudio = create<StudioState>((set, get) => ({
             ...p,
             kind: "avatar" as const,
             photoUrl: dataUrl,
-            photoSource: p.photoSource ?? p.photoUrl,
+            photoSource: p.photoSource,
             params: { ...p.params, cutout: 1, handCut: 1 },
           }
         : p,
@@ -935,6 +936,28 @@ export const useStudio = create<StudioState>((set, get) => ({
       worldPlaces,
       editingCutoutId: null,
       selectedPlaceId: id,
+      kind: "avatar",
+      params: worldPlaces.find((p) => p.id === id)?.params,
+    });
+  },
+  replacePlacePhoto: (id, dataUrl) => {
+    const state = get();
+    const worldPlaces = state.worldPlaces.map((p) =>
+      p.id === id
+        ? {
+            ...p,
+            kind: "avatar" as const,
+            photoUrl: dataUrl,
+            photoSource: dataUrl,
+            params: { ...p.params, cutout: 1, handCut: 0 },
+          }
+        : p,
+    );
+    writeWorld(state.worldScene, worldPlaces);
+    set({
+      worldPlaces,
+      selectedPlaceId: id,
+      editingCutoutId: id,
       kind: "avatar",
       params: worldPlaces.find((p) => p.id === id)?.params,
     });
