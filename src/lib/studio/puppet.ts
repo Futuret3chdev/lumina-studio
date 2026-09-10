@@ -159,6 +159,27 @@ function cgiLimb(
   return c;
 }
 
+function cgiArm(
+  width: number,
+  height: number,
+  sleeve: { r: number; g: number; b: number },
+  skin: { r: number; g: number; b: number },
+) {
+  const c = cgiLimb(width, height, sleeve, null);
+  const ctx = c.getContext("2d");
+  if (!ctx) return c;
+  const w = c.width;
+  const h = c.height;
+  ctx.beginPath();
+  ctx.ellipse(w / 2, h * 0.9, w * 0.42, h * 0.1, 0, 0, Math.PI * 2);
+  const hand = ctx.createRadialGradient(w * 0.42, h * 0.86, 2, w / 2, h * 0.9, w * 0.42);
+  hand.addColorStop(0, shade(skin, 1.08));
+  hand.addColorStop(1, shade(skin, 0.72));
+  ctx.fillStyle = hand;
+  ctx.fill();
+  return c;
+}
+
 function legsNeedStraighten(
   data: Uint8ClampedArray,
   w: number,
@@ -254,8 +275,18 @@ export function buildPuppet(src: HTMLCanvasElement, petHint = false): PuppetRig 
 
   const headC = copyRect(src, minX, minY, maxX + 1, neckY + 2);
   const torsoC = copyRect(src, torsoLeft, neckY, torsoRight + 1, hipY + 2);
-  const armLC = copyRect(src, minX, shoulderY, torsoLeft + 2, hipY - 4);
-  const armRC = copyRect(src, torsoRight - 2, shoulderY, maxX + 1, hipY - 4);
+
+  const wantCgiArms = !pet;
+  const sleeve = meanOpaque(data, w, minX, shoulderY, maxX, shoulderY + Math.max(8, (hipY - shoulderY) * 0.35));
+  const skin = meanOpaque(data, w, minX, minY, maxX, neckY);
+  const armH = Math.max(24, Math.round((hipY - shoulderY) * 1.28));
+  const armW = Math.max(10, bw * 0.13);
+  const armLC = wantCgiArms
+    ? cgiArm(armW, armH, sleeve, skin)
+    : copyRect(src, minX, shoulderY, torsoLeft + 4, hipY);
+  const armRC = wantCgiArms
+    ? cgiArm(armW, armH, sleeve, skin)
+    : copyRect(src, torsoRight - 4, shoulderY, maxX + 1, hipY);
 
   const straighten = !pet && legsNeedStraighten(data, w, minX, maxX, hipY, footY);
   const thighH = Math.max(16, kneeY - hipY);
@@ -300,8 +331,8 @@ export function buildPuppet(src: HTMLCanvasElement, petHint = false): PuppetRig 
     pet,
     head: rel(headC, minX, minY, neck.x, neck.y),
     torso: rel(torsoC, torsoLeft, neckY, mid, hipY),
-    armL: armLC ? rel(armLC, minX, shoulderY, shoulderL.x, shoulderL.y) : null,
-    armR: armRC ? rel(armRC, torsoRight - 2, shoulderY, shoulderR.x, shoulderR.y) : null,
+    armL: armLC ? (wantCgiArms ? part(armLC, armLC.width / 2, 3) : rel(armLC, minX, shoulderY, shoulderL.x, shoulderL.y)) : null,
+    armR: armRC ? (wantCgiArms ? part(armRC, armRC.width / 2, 3) : rel(armRC, torsoRight - 4, shoulderY, shoulderR.x, shoulderR.y)) : null,
     thighL: straighten ? part(thighLC, thighLC.width / 2, 2) : rel(thighLC, minX, hipY, hipLp.x, hipLp.y),
     thighR: straighten ? part(thighRC, thighRC.width / 2, 2) : rel(thighRC, mid, hipY, hipRp.x, hipRp.y),
     shinL: straighten ? part(shinLC, shinLC.width / 2, 2) : rel(shinLC, minX, kneeY, kneeL.x, kneeL.y),

@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { ACCENT_SWATCHES, BODY_SWATCHES, CATALOG_BY_ID, ENV_PRESETS } from "@/lib/studio/catalog";
 import { fileToShot } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
@@ -54,6 +55,52 @@ function Swatches({
             style={{ backgroundColor: color }}
           />
         ))}
+      </div>
+    </div>
+  );
+}
+
+function StepField({
+  label,
+  value,
+  min,
+  max,
+  step,
+  onChange,
+}: {
+  label: string;
+  value: number;
+  min: number;
+  max: number;
+  step: number;
+  onChange: (value: number) => void;
+}) {
+  const clamp = (v: number) => Math.min(max, Math.max(min, Math.round(v / step) * step));
+  return (
+    <div className="flex h-11 items-center justify-between gap-3">
+      <p className="text-sm text-muted">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon-sm"
+          aria-label={`Lower ${label}`}
+          onClick={() => onChange(clamp(value - step))}
+        >
+          −
+        </Button>
+        <p className="w-12 text-center font-mono text-xs tabular-nums text-subtle">
+          {value.toFixed(step < 1 ? 2 : 0)}
+        </p>
+        <Button
+          type="button"
+          variant="secondary"
+          size="icon-sm"
+          aria-label={`Raise ${label}`}
+          onClick={() => onChange(clamp(value + step))}
+        >
+          +
+        </Button>
       </div>
     </div>
   );
@@ -116,6 +163,7 @@ function ToggleRow({
 }
 
 export function Inspector() {
+  const [advanced, setAdvanced] = useState(false);
   const kind = useStudio((s) => s.kind);
   const params = useStudio((s) => s.params);
   const bodyColor = useStudio((s) => s.bodyColor);
@@ -182,7 +230,7 @@ export function Inspector() {
         </p>
       </div>
       <Separator />
-      <ScrollArea className="min-h-0 flex-1">
+      <ScrollArea className="min-h-0 flex-1 touch-pan-y">
         <div className="flex flex-col gap-5 px-4 py-4">
           {mode === "world" && selected && picture && (
             <div className="flex flex-col gap-3">
@@ -212,140 +260,153 @@ export function Inspector() {
                     </button>
                   ))}
                 </div>
-                {Math.round(selected.params.gait ?? 1) !== 0 && (
-                  <div className="flex flex-col gap-3">
-                    <Field
-                      label="Arms"
-                      value={selected.params.arms ?? 1}
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      onChange={(value) =>
-                        updatePlace(selected.id, {
-                          params: { ...selected.params, arms: value },
-                        })
-                      }
-                    />
-                    <Field
-                      label="Stride"
-                      value={selected.params.stride ?? 1}
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      onChange={(value) =>
-                        updatePlace(selected.id, {
-                          params: { ...selected.params, stride: value },
-                        })
-                      }
-                    />
-                    <Field
-                      label="Speed"
-                      value={selected.params.tempo ?? 1}
-                      min={0.4}
-                      max={1.8}
-                      step={0.05}
-                      onChange={(value) =>
-                        updatePlace(selected.id, {
-                          params: { ...selected.params, tempo: value },
-                        })
-                      }
-                    />
-                    <Field
-                      label="Bounce"
-                      value={selected.params.bounce ?? 1}
-                      min={0}
-                      max={2}
-                      step={0.05}
-                      onChange={(value) =>
-                        updatePlace(selected.id, {
-                          params: { ...selected.params, bounce: value },
-                        })
-                      }
-                    />
-                  </div>
-                )}
               </div>
-              <Field
-                label="Height"
-                value={selected.params.height ?? 1}
-                min={0.35}
-                max={1.6}
-                step={0.05}
-                onChange={(value) =>
-                  updatePlace(selected.id, {
-                    params: { ...selected.params, height: value },
-                  })
-                }
-              />
-              <Field
-                label="Size"
-                value={selected.scale}
-                min={0.4}
-                max={2.2}
-                step={0.05}
-                onChange={(value) => updatePlace(selected.id, { scale: value })}
-              />
-              <Field
-                label="Turn"
-                value={selected.rotY}
-                min={-Math.PI}
-                max={Math.PI}
-                step={0.05}
-                onChange={(value) => updatePlace(selected.id, { rotY: value })}
-              />
-              <Button
+              <button
                 type="button"
-                className="w-full"
-                onClick={() => useStudio.getState().setEditingCutout(selected.id, true)}
+                className="text-left text-xs font-medium text-muted"
+                onClick={() => setAdvanced((v) => !v)}
               >
-                Lift subject
-              </Button>
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => useStudio.getState().setEditingCutout(selected.id)}
-              >
-                Cut it out myself
-              </Button>
-              <label className="relative flex h-11 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-elevated text-sm font-medium text-fg">
-                Replace photo
-                <input
-                  type="file"
-                  accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
-                  className="absolute inset-0 cursor-pointer opacity-0"
-                  onChange={async (e) => {
-                    const file = e.currentTarget.files?.[0];
-                    e.currentTarget.value = "";
-                    if (!file) return;
-                    try {
-                      const shot = await fileToShot(file);
-                      useStudio.getState().replacePlacePhoto(selected.id, shot.url);
-                      useStudio.getState().setEditingCutout(selected.id);
-                    } catch {
-                      toast.error("Could not read that photo");
+                {advanced ? "Hide advanced edit" : "Advanced edit"}
+              </button>
+              {advanced && (
+                <div className="flex flex-col gap-3">
+                  {Math.round(selected.params.gait ?? 1) !== 0 && (
+                    <>
+                      <StepField
+                        label="Arms"
+                        value={selected.params.arms ?? 1}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        onChange={(value) =>
+                          updatePlace(selected.id, {
+                            params: { ...selected.params, arms: value },
+                          })
+                        }
+                      />
+                      <StepField
+                        label="Stride"
+                        value={selected.params.stride ?? 1}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        onChange={(value) =>
+                          updatePlace(selected.id, {
+                            params: { ...selected.params, stride: value },
+                          })
+                        }
+                      />
+                      <StepField
+                        label="Speed"
+                        value={selected.params.tempo ?? 1}
+                        min={0.4}
+                        max={1.8}
+                        step={0.1}
+                        onChange={(value) =>
+                          updatePlace(selected.id, {
+                            params: { ...selected.params, tempo: value },
+                          })
+                        }
+                      />
+                      <StepField
+                        label="Bounce"
+                        value={selected.params.bounce ?? 1}
+                        min={0}
+                        max={2}
+                        step={0.1}
+                        onChange={(value) =>
+                          updatePlace(selected.id, {
+                            params: { ...selected.params, bounce: value },
+                          })
+                        }
+                      />
+                    </>
+                  )}
+                  <StepField
+                    label="Height"
+                    value={selected.params.height ?? 1}
+                    min={0.35}
+                    max={1.6}
+                    step={0.05}
+                    onChange={(value) =>
+                      updatePlace(selected.id, {
+                        params: { ...selected.params, height: value },
+                      })
                     }
-                  }}
-                />
-              </label>
-              {selected.kind === "photo-relief" && (
-                <Button
-                  type="button"
-                  variant="secondary"
-                  className="w-full"
-                  onClick={() => convertToPerson(selected.id)}
-                >
-                  Auto cut-out
-                </Button>
+                  />
+                  <StepField
+                    label="Size"
+                    value={selected.scale}
+                    min={0.4}
+                    max={2.2}
+                    step={0.1}
+                    onChange={(value) => updatePlace(selected.id, { scale: value })}
+                  />
+                  <StepField
+                    label="Turn"
+                    value={selected.rotY}
+                    min={-Math.PI}
+                    max={Math.PI}
+                    step={0.15}
+                    onChange={(value) => updatePlace(selected.id, { rotY: value })}
+                  />
+                  <Button
+                    type="button"
+                    className="w-full"
+                    onClick={() => useStudio.getState().setEditingCutout(selected.id, true)}
+                  >
+                    Lift subject
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => useStudio.getState().setEditingCutout(selected.id)}
+                  >
+                    Cut it out myself
+                  </Button>
+                  <label className="relative flex h-11 w-full cursor-pointer items-center justify-center overflow-hidden rounded-md bg-elevated text-sm font-medium text-fg">
+                    Replace photo
+                    <input
+                      type="file"
+                      accept="image/*,image/heic,image/heif,.heic,.heif,.jpg,.jpeg,.png,.webp"
+                      className="absolute inset-0 cursor-pointer opacity-0"
+                      onChange={async (e) => {
+                        const file = e.currentTarget.files?.[0];
+                        e.currentTarget.value = "";
+                        if (!file) return;
+                        try {
+                          const shot = await fileToShot(file);
+                          useStudio.getState().replacePlacePhoto(selected.id, shot.url);
+                          void import("@/lib/studio/auto-rig").then((m) =>
+                            m.autoRigPlace(selected.id, shot.url),
+                          );
+                        } catch {
+                          toast.error("Could not read that photo");
+                        }
+                      }}
+                    />
+                  </label>
+                  {selected.kind === "photo-relief" && (
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      className="w-full"
+                      onClick={() => convertToPerson(selected.id)}
+                    >
+                      Auto cut-out
+                    </Button>
+                  )}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full"
+                    onClick={() => removePlace(selected.id)}
+                  >
+                    Remove this picture
+                  </Button>
+                </div>
               )}
-              <Button
-                type="button"
-                variant="secondary"
-                className="w-full"
-                onClick={() => removePlace(selected.id)}
-              >
-                Remove this picture
-              </Button>
               <Separator />
             </div>
           )}

@@ -752,6 +752,9 @@ export const useStudio = create<StudioState>((set, get) => ({
         metalness: place.metalness,
         roughness: place.roughness,
       });
+      void import("@/lib/studio/auto-rig").then((m) => {
+        if (photoUrl) m.autoRigPlace(place.id, photoUrl);
+      });
       return place.id;
     }
     const item = CATALOG_BY_ID[kind];
@@ -816,6 +819,7 @@ export const useStudio = create<StudioState>((set, get) => ({
       autoRotate: false,
       showPlatform: false,
     });
+    void import("@/lib/studio/auto-rig").then((m) => m.autoRigPlace(place.id, photoUrl));
     return place.id;
   },
   placeUpload: (name, glbUrl) => {
