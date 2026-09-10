@@ -287,8 +287,8 @@ const KIND_FINISH: Partial<
   "photo-relief": {
     body: "#f4f4f5",
     accent: "#27272a",
-    metalness: 0.12,
-    roughness: 0.52,
+    metalness: 0.06,
+    roughness: 0.68,
   },
 };
 
@@ -471,8 +471,8 @@ export const useStudio = create<StudioState>((set, get) => ({
     const finish = KIND_FINISH["photo-relief"] ?? {
       body: "#f4f4f5",
       accent: "#27272a",
-      metalness: 0.12,
-      roughness: 0.52,
+      metalness: 0.06,
+      roughness: 0.68,
     };
     set({
       photos,

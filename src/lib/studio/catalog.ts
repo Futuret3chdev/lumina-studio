@@ -411,8 +411,8 @@ export const CATALOG: CatalogItem[] = [
     id: "photo-relief",
     name: "Photo sculpt",
     category: "photo",
-    blurb: "A photograph lifted into a 3D relief you can light and export.",
-    defaults: { depth: 0.38, cutout: 1, thickness: 0.1 },
+    blurb: "A photograph lifted into a smooth 3D sculpt you can light and export.",
+    defaults: { depth: 0.32, cutout: 1, thickness: 0.12 },
     params: [
       shape("depth", "Relief", 0.05, 1.2),
       shape("cutout", "Knockout", 0.55, 1, 0.01),

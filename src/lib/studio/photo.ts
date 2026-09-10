@@ -174,6 +174,8 @@ export async function loadPixels(
   canvas.height = rows;
   const ctx = canvas.getContext("2d", { willReadFrequently: true });
   if (!ctx) throw new Error("Canvas unavailable");
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
   ctx.drawImage(img, 0, 0, cols, rows);
   return {
     data: ctx.getImageData(0, 0, cols, rows).data,

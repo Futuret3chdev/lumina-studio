@@ -22,9 +22,264 @@ import { loadPixels } from "@/lib/studio/photo";
 import { n, Surface } from "./shared";
 import type { MeshViewProps } from "@/lib/studio/types";
 
-const COLS = 112;
-const ROWS = 112;
+const COLS = 168;
+const ROWS = 168;
 const SKIP_SKIN = /glass|tire|rim|hub|shadow|light/i;
+
+function blurField(
+  src: Float32Array,
+  cols: number,
+  rows: number,
+  radius: number,
+  passes = 2,
+) {
+  if (radius < 1) return src.slice();
+  const tmp = new Float32Array(src.length);
+  let cur = src.slice();
+  const k = radius * 2 + 1;
+  for (let p = 0; p < passes; p += 1) {
+    for (let y = 0; y < rows; y += 1) {
+      const row = y * cols;
+      let acc = 0;
+      for (let i = -radius; i <= radius; i += 1) {
+        const x = i < 0 ? 0 : i >= cols ? cols - 1 : i;
+        acc += cur[row + x]!;
+      }
+      for (let x = 0; x < cols; x += 1) {
+        tmp[row + x] = acc / k;
+        const leave = x - radius;
+        const enter = x + radius + 1;
+        acc -= cur[row + (leave < 0 ? 0 : leave)]!;
+        acc += cur[row + (enter >= cols ? cols - 1 : enter)]!;
+      }
+    }
+    for (let x = 0; x < cols; x += 1) {
+      let acc = 0;
+      for (let i = -radius; i <= radius; i += 1) {
+        const y = i < 0 ? 0 : i >= rows ? rows - 1 : i;
+        acc += tmp[y * cols + x]!;
+      }
+      for (let y = 0; y < rows; y += 1) {
+        cur[y * cols + x] = acc / k;
+        const leave = y - radius;
+        const enter = y + radius + 1;
+        acc -= tmp[(leave < 0 ? 0 : leave) * cols + x]!;
+        acc += tmp[(enter >= rows ? rows - 1 : enter) * cols + x]!;
+      }
+    }
+  }
+  return cur;
+}
+
+function percentile(arr: Float32Array, p: number) {
+  const copy = Array.from(arr);
+  copy.sort((a, b) => a - b);
+  const i = Math.min(
+    copy.length - 1,
+    Math.max(0, Math.floor(p * (copy.length - 1))),
+  );
+  return copy[i] ?? 0;
+}
+
+function remap01(arr: Float32Array, loP = 0.08, hiP = 0.92) {
+  const lo = percentile(arr, loP);
+  const hi = percentile(arr, hiP);
+  const span = Math.max(0.04, hi - lo);
+  const out = new Float32Array(arr.length);
+  for (let i = 0; i < arr.length; i += 1) {
+    const t = (arr[i]! - lo) / span;
+    out[i] = t < 0 ? 0 : t > 1 ? 1 : t;
+  }
+  return out;
+}
+
+function subjectMask(data: Uint8ClampedArray, cols: number, rows: number) {
+  let br = 0;
+  let bg = 0;
+  let bb = 0;
+  let bn = 0;
+  const add = (x: number, y: number) => {
+    const i = (y * cols + x) * 4;
+    br += data[i] ?? 0;
+    bg += data[i + 1] ?? 0;
+    bb += data[i + 2] ?? 0;
+    bn += 1;
+  };
+  for (let x = 0; x < cols; x += 1) {
+    add(x, 0);
+    add(x, rows - 1);
+  }
+  for (let y = 1; y < rows - 1; y += 1) {
+    add(0, y);
+    add(cols - 1, y);
+  }
+  br /= bn * 255;
+  bg /= bn * 255;
+  bb /= bn * 255;
+
+  let cr = 0;
+  let cg = 0;
+  let cb = 0;
+  let cn = 0;
+  const x0 = Math.floor(cols * 0.3);
+  const x1 = Math.ceil(cols * 0.7);
+  const y0 = Math.floor(rows * 0.3);
+  const y1 = Math.ceil(rows * 0.7);
+  for (let y = y0; y < y1; y += 1) {
+    for (let x = x0; x < x1; x += 1) {
+      const i = (y * cols + x) * 4;
+      cr += data[i] ?? 0;
+      cg += data[i + 1] ?? 0;
+      cb += data[i + 2] ?? 0;
+      cn += 1;
+    }
+  }
+  cr /= cn * 255;
+  cg /= cn * 255;
+  cb /= cn * 255;
+
+  const cx = (cols - 1) / 2;
+  const cy = (rows - 1) / 2;
+  const maxR = Math.hypot(cx, cy) || 1;
+  const mask = new Float32Array(cols * rows);
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const i = (y * cols + x) * 4;
+      const r = (data[i] ?? 0) / 255;
+      const g = (data[i + 1] ?? 0) / 255;
+      const b = (data[i + 2] ?? 0) / 255;
+      const dBg = Math.hypot(r - br, g - bg, b - bb);
+      const dFg = Math.hypot(r - cr, g - cg, b - cb);
+      const maxc = Math.max(r, g, b);
+      const minc = Math.min(r, g, b);
+      const sat = maxc === 0 ? 0 : (maxc - minc) / maxc;
+      const dist = Math.hypot(x - cx, y - cy) / maxR;
+      const center = Math.exp(-dist * dist * 2.6);
+      mask[y * cols + x] = (dBg - dFg) * 1.7 + center * 0.5 + sat * 0.28;
+    }
+  }
+  const scored = remap01(mask, 0.14, 0.86);
+  for (let i = 0; i < scored.length; i += 1) {
+    const t = scored[i]!;
+    scored[i] = t * t * (3 - 2 * t);
+  }
+  return blurField(scored, cols, rows, 5, 2);
+}
+
+function chamfer(mask: Float32Array, cols: number, rows: number) {
+  const inf = cols + rows;
+  const dist = new Float32Array(cols * rows);
+  for (let i = 0; i < dist.length; i += 1) {
+    dist[i] = mask[i]! > 0.42 ? inf : 0;
+  }
+  const ortho = 1;
+  const diag = 1.41421356;
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const i = y * cols + x;
+      if (dist[i] === 0) continue;
+      let v = dist[i]!;
+      if (x > 0) v = Math.min(v, dist[i - 1]! + ortho);
+      if (y > 0) v = Math.min(v, dist[i - cols]! + ortho);
+      if (x > 0 && y > 0) v = Math.min(v, dist[i - cols - 1]! + diag);
+      if (x + 1 < cols && y > 0) v = Math.min(v, dist[i - cols + 1]! + diag);
+      dist[i] = v;
+    }
+  }
+  for (let y = rows - 1; y >= 0; y -= 1) {
+    for (let x = cols - 1; x >= 0; x -= 1) {
+      const i = y * cols + x;
+      if (dist[i] === 0) continue;
+      let v = dist[i]!;
+      if (x + 1 < cols) v = Math.min(v, dist[i + 1]! + ortho);
+      if (y + 1 < rows) v = Math.min(v, dist[i + cols]! + ortho);
+      if (x + 1 < cols && y + 1 < rows) v = Math.min(v, dist[i + cols + 1]! + diag);
+      if (x > 0 && y + 1 < rows) v = Math.min(v, dist[i + cols - 1]! + diag);
+      dist[i] = v;
+    }
+  }
+  let max = 0.0001;
+  for (let i = 0; i < dist.length; i += 1) {
+    if (dist[i]! < inf) max = Math.max(max, dist[i]!);
+  }
+  for (let i = 0; i < dist.length; i += 1) {
+    dist[i] = dist[i]! >= inf ? 0 : dist[i]! / max;
+  }
+  return blurField(dist, cols, rows, 4, 2);
+}
+
+function laplacian(heights: Float32Array, cols: number, rows: number, times = 2) {
+  const next = new Float32Array(heights.length);
+  let cur = heights;
+  for (let t = 0; t < times; t += 1) {
+    for (let y = 0; y < rows; y += 1) {
+      for (let x = 0; x < cols; x += 1) {
+        const i = y * cols + x;
+        if (x === 0 || y === 0 || x === cols - 1 || y === rows - 1) {
+          next[i] = cur[i]!;
+          continue;
+        }
+        next[i] =
+          cur[i]! * 0.4 +
+          (cur[i - 1]! + cur[i + 1]! + cur[i - cols]! + cur[i + cols]!) * 0.15;
+      }
+    }
+    cur = next.slice();
+  }
+  return cur;
+}
+
+function edgeFalloff(x: number, y: number, cols: number, rows: number) {
+  const m = 0.045;
+  const u = x / (cols - 1);
+  const v = y / (rows - 1);
+  const dx = u < m ? u / m : u > 1 - m ? (1 - u) / m : 1;
+  const dy = v < m ? v / m : v > 1 - m ? (1 - v) / m : 1;
+  const e = Math.min(dx, dy);
+  return e * e * (3 - 2 * e);
+}
+
+function buildHeights(data: Uint8ClampedArray, cols: number, rows: number) {
+  const lum = new Float32Array(cols * rows);
+  for (let i = 0; i < cols * rows; i += 1) {
+    const p = i * 4;
+    lum[i] =
+      (0.2126 * (data[p] ?? 0) +
+        0.7152 * (data[p + 1] ?? 0) +
+        0.0722 * (data[p + 2] ?? 0)) /
+      255;
+  }
+
+  const form = remap01(blurField(lum, cols, rows, 8, 3), 0.1, 0.9);
+  const mid = blurField(lum, cols, rows, 2, 2);
+  const detail = new Float32Array(lum.length);
+  for (let i = 0; i < lum.length; i += 1) {
+    detail[i] = (lum[i]! - mid[i]!) * 2.4;
+  }
+  const detailN = remap01(detail, 0.12, 0.88);
+  const mask = subjectMask(data, cols, rows);
+  let plump = chamfer(mask, cols, rows);
+  let plumpMax = 0;
+  for (let i = 0; i < plump.length; i += 1) plumpMax = Math.max(plumpMax, plump[i]!);
+  if (plumpMax < 0.08) {
+    plump = blurField(form, cols, rows, 6, 2);
+  }
+
+  const heights = new Float32Array(cols * rows);
+  for (let y = 0; y < rows; y += 1) {
+    for (let x = 0; x < cols; x += 1) {
+      const i = y * cols + x;
+      const edge = edgeFalloff(x, y, cols, rows);
+      const m = mask[i]! * edge;
+      const z =
+        plump[i]! * 0.74 +
+        form[i]! * 0.18 * m +
+        (detailN[i]! - 0.5) * 0.16 * m;
+      heights[i] = Math.max(0, z) * edge;
+    }
+  }
+  return laplacian(heights, cols, rows, 2);
+}
 
 function buildRelief(
   data: Uint8ClampedArray,
@@ -41,6 +296,7 @@ function buildRelief(
   const indices: number[] = [];
   const keep = new Uint8Array(COLS * ROWS);
   const keepAll = cutout >= 0.995;
+  const heights = buildHeights(data, COLS, ROWS);
 
   for (let y = 0; y < ROWS; y += 1) {
     for (let x = 0; x < COLS; x += 1) {
@@ -53,7 +309,7 @@ function buildRelief(
       keep[y * COLS + x] = a > 10 && (keepAll || lum <= cutout) ? 1 : 0;
       const px = (x / (COLS - 1) - 0.5) * width;
       const py = (1 - y / (ROWS - 1)) * height;
-      const pz = lum * depth;
+      const pz = heights[y * COLS + x]! * depth;
       positions.push(px, py, pz);
       uvs.push(x / (COLS - 1), 1 - y / (ROWS - 1));
     }
@@ -190,9 +446,9 @@ export function PhotoMesh({
   scale,
   photoUrl,
 }: MeshViewProps) {
-  const depth = n(params, "depth", 0.38);
+  const depth = n(params, "depth", 0.32);
   const cutout = n(params, "cutout", 1);
-  const thickness = n(params, "thickness", 0.1);
+  const thickness = n(params, "thickness", 0.12);
   const invalidate = useThree((s) => s.invalidate);
   const [built, setBuilt] = useState<{
     geo: BufferGeometry;
@@ -246,7 +502,7 @@ export function PhotoMesh({
   }, [built, texture]);
 
   const border = 0.08;
-  const frameDepth = 0.07;
+  const frameDepth = 0.08;
 
   if (!photoUrl) {
     return (
@@ -271,10 +527,10 @@ export function PhotoMesh({
         >
           <meshStandardMaterial
             map={texture}
-            metalness={metalness}
-            roughness={roughness}
+            metalness={Math.min(metalness, 0.18)}
+            roughness={Math.max(roughness, 0.58)}
             side={DoubleSide}
-            envMapIntensity={1.05}
+            envMapIntensity={0.38}
           />
         </mesh>
       ) : texture ? (
@@ -282,10 +538,10 @@ export function PhotoMesh({
           <planeGeometry args={[frame.w, frame.h]} />
           <meshStandardMaterial
             map={texture}
-            metalness={metalness}
-            roughness={roughness}
+            metalness={Math.min(metalness, 0.18)}
+            roughness={Math.max(roughness, 0.58)}
             side={DoubleSide}
-            envMapIntensity={1.05}
+            envMapIntensity={0.38}
           />
         </mesh>
       ) : (
