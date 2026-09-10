@@ -197,6 +197,14 @@ export function Inspector() {
               <Button
                 type="button"
                 className="w-full"
+                onClick={() => useStudio.getState().setEditingCutout(selected.id, true)}
+              >
+                Lift subject
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-full"
                 onClick={() => useStudio.getState().setEditingCutout(selected.id)}
               >
                 Cut it out myself

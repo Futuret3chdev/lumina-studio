@@ -127,6 +127,7 @@ export type StudioState = {
   worldPlaces: WorldPlace[];
   selectedPlaceId: string | null;
   editingCutoutId: string | null;
+  editingCutoutLift: boolean;
   setKind: (kind: AssetKind) => void;
   setCategory: (category: CategoryId) => void;
   setParam: (key: string, value: number) => void;
@@ -163,7 +164,7 @@ export type StudioState = {
   movePlace: (id: string, x: number, z: number) => void;
   updatePlace: (id: string, patch: Partial<WorldPlace>) => void;
   convertToPerson: (id: string) => void;
-  setEditingCutout: (id: string | null) => void;
+  setEditingCutout: (id: string | null, lift?: boolean) => void;
   applyCutout: (id: string, dataUrl: string) => void;
   replacePlacePhoto: (id: string, dataUrl: string) => void;
   removePlace: (id: string) => void;
@@ -405,6 +406,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   worldPlaces: savedWorld.places,
   selectedPlaceId: null,
   editingCutoutId: null,
+  editingCutoutLift: false,
   setKind: (kind) => {
     const item = CATALOG_BY_ID[kind];
     const finish = KIND_FINISH[kind];
@@ -915,7 +917,8 @@ export const useStudio = create<StudioState>((set, get) => ({
       scale: place.scale,
     });
   },
-  setEditingCutout: (editingCutoutId) => set({ editingCutoutId }),
+  setEditingCutout: (editingCutoutId, lift = false) =>
+    set({ editingCutoutId, editingCutoutLift: Boolean(editingCutoutId) && lift }),
   applyCutout: (id, dataUrl) => {
     const state = get();
     const target = state.worldPlaces.find((p) => p.id === id);

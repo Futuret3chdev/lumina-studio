@@ -4,6 +4,7 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { fileToShot } from "@/lib/studio/photo";
 import { cutoutPerson } from "@/lib/studio/cutout";
+import { liftSubject, preloadLift } from "@/lib/studio/lift-subject";
 import { useStudio } from "@/lib/studio/store";
 
 type Tool = "erase" | "keep";
@@ -38,6 +39,7 @@ function hasHoles(canvas: HTMLCanvasElement) {
 
 export function CutoutEditor() {
   const id = useStudio((s) => s.editingCutoutId);
+  const autoLift = useStudio((s) => s.editingCutoutLift);
   const places = useStudio((s) => s.worldPlaces);
   const place = places.find((p) => p.id === id) ?? null;
   const workRef = useRef<HTMLCanvasElement>(null);
@@ -48,10 +50,17 @@ export function CutoutEditor() {
   const startPt = useRef<{ x: number; y: number } | null>(null);
   const undo = useRef<ImageData[]>([]);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [tool, setTool] = useState<Tool>("keep");
+  const lifted = useRef(false);
+  const liftingLock = useRef(false);
+  const [tool, setTool] = useState<Tool>("erase");
   const [size, setSize] = useState(48);
   const [ready, setReady] = useState(false);
   const [lostOriginal, setLostOriginal] = useState(false);
+  const [busy, setBusy] = useState<string | null>(null);
+
+  useEffect(() => {
+    preloadLift();
+  }, []);
 
   useEffect(() => {
     if (!place?.photoUrl) {
@@ -88,6 +97,7 @@ export function CutoutEditor() {
         const holed = hasHoles(orig);
         setLostOriginal(holed && !place.photoSource);
         undo.current = [];
+        lifted.current = false;
         setReady(true);
       } catch {
         toast.error("Could not open that picture");
@@ -106,6 +116,38 @@ export function CutoutEditor() {
     undo.current.push(ctx.getImageData(0, 0, work.width, work.height));
     if (undo.current.length > 12) undo.current.shift();
   }
+
+  async function runLift() {
+    const orig = origRef.current;
+    const work = workRef.current;
+    const ctx = work?.getContext("2d");
+    if (!orig || !work || !ctx || busy || liftingLock.current) return;
+    liftingLock.current = true;
+    setBusy("Finding the person or animal");
+    try {
+      snapshot();
+      const cut = await liftSubject(orig, (label, pct) => {
+        setBusy(`${label} · ${pct}%`);
+      });
+      ctx.clearRect(0, 0, work.width, work.height);
+      const ox = Math.round((work.width - cut.width) / 2);
+      const oy = Math.round((work.height - cut.height) / 2);
+      ctx.drawImage(cut, ox, oy);
+      lifted.current = true;
+      toast.success("That's them — tidy the edge if you need");
+    } catch {
+      toast.error("Could not lift that subject here — paint the backdrop instead");
+    } finally {
+      setBusy(null);
+      liftingLock.current = false;
+      useStudio.setState({ editingCutoutLift: false });
+    }
+  }
+
+  useEffect(() => {
+    if (ready && autoLift && !busy) void runLift();
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once when the photo is ready
+  }, [ready, autoLift]);
 
   function paint(e: React.PointerEvent<HTMLCanvasElement>) {
     const work = workRef.current;
@@ -276,8 +318,13 @@ export function CutoutEditor() {
   function onUp(e: React.PointerEvent<HTMLCanvasElement>) {
     if (drawing.current && !moved.current) {
       onUndo();
-      if (tool === "erase") erasePatch(e);
-      else fillFromOriginal(e);
+      if (!lifted.current) {
+        void runLift();
+      } else if (tool === "erase") {
+        erasePatch(e);
+      } else {
+        fillFromOriginal(e);
+      }
     }
     drawing.current = false;
     last.current = null;
@@ -360,20 +407,30 @@ export function CutoutEditor() {
         </div>
       </div>
       <p className="px-3 pb-2 text-xs text-muted">
-        Starts from the full photo. Erase the backdrop, or tap Keep on a hole to fill it back in.
+        Tap the person or animal to lift them off the backdrop — same idea as on your phone.
         {lostOriginal ? " This one lost its original — upload the photo again." : ""}
       </p>
       <div className="relative flex min-h-0 flex-1 items-center justify-center overflow-hidden bg-[linear-gradient(45deg,#2a2a30_25%,transparent_25%),linear-gradient(-45deg,#2a2a30_25%,transparent_25%),linear-gradient(45deg,transparent_75%,#2a2a30_75%),linear-gradient(-45deg,transparent_75%,#2a2a30_75%)] bg-[length:24px_24px] bg-[position:0_0,0_12px,12px_-12px,-12px_0] p-2">
         <canvas
           ref={workRef}
           className="max-h-full max-w-full touch-none"
-          onPointerDown={onDown}
-          onPointerMove={onMove}
-          onPointerUp={onUp}
-          onPointerCancel={onUp}
+          onPointerDown={busy ? undefined : onDown}
+          onPointerMove={busy ? undefined : onMove}
+          onPointerUp={busy ? undefined : onUp}
+          onPointerCancel={busy ? undefined : onUp}
         />
+        {busy && (
+          <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-bg/70 px-6 text-center">
+            <p className="text-sm font-medium">Lifting the subject</p>
+            <p className="text-xs text-muted">{busy}</p>
+          </div>
+        )}
       </div>
       <div className="flex flex-col gap-2 p-3 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+        <Button type="button" className="w-full" disabled={!ready || Boolean(busy)} onClick={() => void runLift()}>
+          <Sparkles className="size-4" />
+          Lift subject
+        </Button>
         <div className="flex gap-2">
           <Button
             type="button"
