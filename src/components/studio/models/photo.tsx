@@ -233,10 +233,17 @@ export function PhotoMesh({
   );
 
   const frame = useMemo(() => {
-    const w = built?.width ?? 1.6;
-    const h = built?.height ?? 1.6;
+    const img = texture?.image as { width?: number; height?: number } | undefined;
+    const aspect =
+      img?.width && img?.height
+        ? img.width / Math.max(1, img.height)
+        : built
+          ? built.width / Math.max(0.01, built.height)
+          : 1;
+    const w = aspect >= 1 ? 2.2 : 2.2 * aspect;
+    const h = aspect >= 1 ? 2.2 / aspect : 2.2;
     return { w, h };
-  }, [built]);
+  }, [built, texture]);
 
   const border = 0.08;
   const frameDepth = 0.07;
@@ -262,6 +269,17 @@ export function PhotoMesh({
           position={[0, 0.02, 0]}
           name="PhotoRelief"
         >
+          <meshStandardMaterial
+            map={texture}
+            metalness={metalness}
+            roughness={roughness}
+            side={DoubleSide}
+            envMapIntensity={1.05}
+          />
+        </mesh>
+      ) : texture ? (
+        <mesh position={[0, frame.h / 2, 0.01]} castShadow name="PhotoPlate">
+          <planeGeometry args={[frame.w, frame.h]} />
           <meshStandardMaterial
             map={texture}
             metalness={metalness}

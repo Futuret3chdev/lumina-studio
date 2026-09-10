@@ -4,6 +4,7 @@ import {
   Camera,
   Download,
   Image,
+  ImageUp,
   RotateCw,
   Shuffle,
 } from "lucide-react";
@@ -11,8 +12,8 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { CATALOG_BY_ID } from "@/lib/studio/catalog";
 import { capturePng, exportGlb, exportPng } from "@/lib/studio/export";
-import { openNativeCamera, prefersNativeCamera } from "@/lib/studio/photo";
 import { useStudio } from "@/lib/studio/store";
+import { ShotFileLabel } from "@/components/studio/photo-capture";
 import type { CameraPreset } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
 
@@ -94,16 +95,16 @@ export function Topbar() {
       </div>
 
       <div className="pointer-events-auto flex items-center gap-1 rounded-xl bg-surface p-1 shadow-[var(--shadow-border)]">
-        <Button
-          type="button"
-          size="sm"
-          onClick={() => {
-            if (prefersNativeCamera()) openNativeCamera();
-            else useStudio.getState().setCaptureOpen(true);
-          }}
-        >
-          <Camera className="size-4" />
-          <span className="hidden sm:inline">Photo</span>
+        <Button asChild size="sm">
+          <ShotFileLabel capture ariaLabel="Take photo">
+            <Camera className="size-4" />
+            <span className="hidden sm:inline">Photo</span>
+          </ShotFileLabel>
+        </Button>
+        <Button asChild variant="ghost" size="icon-sm">
+          <ShotFileLabel ariaLabel="Upload photo">
+            <ImageUp className="size-4" />
+          </ShotFileLabel>
         </Button>
         <Button
           type="button"

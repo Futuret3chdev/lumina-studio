@@ -68,6 +68,7 @@ export type StudioState = {
   wrapPhoto: boolean;
   previousKind: AssetKind;
   captureOpen: boolean;
+  photoBusy: boolean;
   setKind: (kind: AssetKind) => void;
   setCategory: (category: CategoryId) => void;
   setParam: (key: string, value: number) => void;
@@ -91,6 +92,7 @@ export type StudioState = {
   restoreSaved: (asset: SavedAsset) => void;
   setGalleryOpen: (open: boolean) => void;
   setCaptureOpen: (open: boolean) => void;
+  setPhotoBusy: (busy: boolean) => void;
   importShot: (shot: PhotoShot, mode?: PhotoImportMode) => void;
   selectPhoto: (id: string) => void;
   setWrapPhoto: (value: boolean) => void;
@@ -320,6 +322,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   wrapPhoto: false,
   previousKind: "sports-car",
   captureOpen: false,
+  photoBusy: false,
   setKind: (kind) => {
     const item = CATALOG_BY_ID[kind];
     const finish = KIND_FINISH[kind];
@@ -446,6 +449,7 @@ export const useStudio = create<StudioState>((set, get) => ({
   },
   setGalleryOpen: (galleryOpen) => set({ galleryOpen }),
   setCaptureOpen: (captureOpen) => set({ captureOpen }),
+  setPhotoBusy: (photoBusy) => set({ photoBusy }),
   importShot: (shot, mode = "sculpt") => {
     const state = get();
     const photos = rememberPhoto(state.photos, shot);

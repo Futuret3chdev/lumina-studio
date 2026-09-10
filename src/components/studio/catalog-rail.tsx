@@ -10,7 +10,7 @@ import {
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import { CATALOG, CATEGORIES, itemsIn } from "@/lib/studio/catalog";
-import { openNativeCamera, prefersNativeCamera } from "@/lib/studio/photo";
+import { ShotFileLabel } from "@/components/studio/photo-capture";
 import { useStudio } from "@/lib/studio/store";
 import type { CategoryId } from "@/lib/studio/types";
 import { cn } from "@/lib/utils";
@@ -36,23 +36,20 @@ export function CatalogRail() {
   const setCategory = useStudio((s) => s.setCategory);
   const setKind = useStudio((s) => s.setKind);
   const setGalleryOpen = useStudio((s) => s.setGalleryOpen);
-  const setCaptureOpen = useStudio((s) => s.setCaptureOpen);
   const selectPhoto = useStudio((s) => s.selectPhoto);
   const items = itemsIn(category);
 
   return (
     <aside className="pointer-events-auto flex h-full w-56 shrink-0 flex-col rounded-xl bg-surface shadow-[var(--shadow-border)]">
       <div className="flex flex-col gap-1 p-2">
-        <Button
-          type="button"
-          className="w-full"
-          onClick={() => {
-            if (prefersNativeCamera()) openNativeCamera();
-            else setCaptureOpen(true);
-          }}
-        >
-          <Camera className="size-4" />
-          Take photo
+        <Button asChild className="w-full">
+          <ShotFileLabel capture>
+            <Camera className="size-4" />
+            Take photo
+          </ShotFileLabel>
+        </Button>
+        <Button asChild variant="secondary" className="w-full">
+          <ShotFileLabel>Upload photo</ShotFileLabel>
         </Button>
         <div className="grid grid-cols-4 gap-1">
           {CATEGORIES.map((cat) => {
@@ -154,20 +151,18 @@ export function CatalogRail() {
 export function MobileCatalog({ onOpenGallery }: { onOpenGallery?: () => void }) {
   const kind = useStudio((s) => s.kind);
   const setKind = useStudio((s) => s.setKind);
-  const setCaptureOpen = useStudio((s) => s.setCaptureOpen);
 
   return (
     <div className="flex gap-2 overflow-x-auto px-1 pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
-      <button
-        type="button"
-        onClick={() => {
-          if (prefersNativeCamera()) openNativeCamera();
-          else setCaptureOpen(true);
-        }}
+      <ShotFileLabel
+        capture
         className="h-11 shrink-0 rounded-full bg-primary px-4 text-sm font-medium text-primary-foreground shadow-[var(--shadow-border)]"
       >
         Take photo
-      </button>
+      </ShotFileLabel>
+      <ShotFileLabel className="h-11 shrink-0 rounded-full bg-elevated px-4 text-sm font-medium text-fg shadow-[var(--shadow-border)]">
+        Upload
+      </ShotFileLabel>
       {CATALOG.filter((item) => item.id !== "photo-relief").map((item) => (
         <button
           key={item.id}

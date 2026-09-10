@@ -18,35 +18,6 @@ const MAX_EDGE = 1024;
 const THUMB_EDGE = 192;
 const JPEG_QUALITY = 0.86;
 
-const captureApi = {
-  openCamera: () => {},
-  openLibrary: () => {},
-};
-
-export function registerPhotoCapture(next: {
-  openCamera: () => void;
-  openLibrary: () => void;
-}) {
-  captureApi.openCamera = next.openCamera;
-  captureApi.openLibrary = next.openLibrary;
-}
-
-export function openNativeCamera() {
-  captureApi.openCamera();
-}
-
-export function openPhotoLibrary() {
-  captureApi.openLibrary();
-}
-
-export function prefersNativeCamera() {
-  if (typeof window === "undefined") return false;
-  return (
-    window.matchMedia("(pointer: coarse)").matches ||
-    navigator.maxTouchPoints > 1
-  );
-}
-
 function uid() {
   return typeof crypto !== "undefined" && "randomUUID" in crypto
     ? crypto.randomUUID()
@@ -61,31 +32,63 @@ function loadImage(src: string) {
   return new Promise<HTMLImageElement>((resolve, reject) => {
     const img = new Image();
     if (src.startsWith("http")) img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
+    img.onload = () => {
+      const finish = () => resolve(img);
+      if (typeof img.decode === "function") {
+        void img.decode().then(finish).catch(finish);
+      } else {
+        finish();
+      }
+    };
     img.onerror = () => reject(new Error("Could not read that photo"));
     img.src = src;
   });
 }
 
-async function decodeBlob(blob: Blob): Promise<ImageBitmap | HTMLImageElement> {
+async function blobToDataUrl(blob: Blob) {
+  return new Promise<string>((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(new Error("Could not read that photo"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+async function decodeBlob(blob: Blob): Promise<{
+  source: ImageBitmap | HTMLImageElement;
+  objectUrl: string | null;
+}> {
   if (typeof createImageBitmap === "function") {
     try {
-      return await createImageBitmap(blob, {
+      const bitmap = await createImageBitmap(blob, {
         imageOrientation: "from-image",
       } as ImageBitmapOptions);
+      if (bitmap.width > 1 && bitmap.height > 1) {
+        return { source: bitmap, objectUrl: null };
+      }
+      bitmap.close();
     } catch {
       try {
-        return await createImageBitmap(blob);
+        const bitmap = await createImageBitmap(blob);
+        if (bitmap.width > 1 && bitmap.height > 1) {
+          return { source: bitmap, objectUrl: null };
+        }
+        bitmap.close();
       } catch {
-        // fall through to HTMLImageElement
+        // fall through
       }
     }
   }
-  const url = URL.createObjectURL(blob);
+
+  const objectUrl = URL.createObjectURL(blob);
   try {
-    return await loadImage(url);
-  } finally {
-    URL.revokeObjectURL(url);
+    const img = await loadImage(objectUrl);
+    return { source: img, objectUrl };
+  } catch {
+    URL.revokeObjectURL(objectUrl);
+    const dataUrl = await blobToDataUrl(blob);
+    const img = await loadImage(dataUrl);
+    return { source: img, objectUrl: null };
   }
 }
 
@@ -113,20 +116,32 @@ function toJpeg(canvas: HTMLCanvasElement, quality = JPEG_QUALITY) {
   return canvas.toDataURL("image/jpeg", quality);
 }
 
+export function isPhotoFile(file: File) {
+  if (file.type.startsWith("image/")) return true;
+  return /\.(jpe?g|png|gif|webp|heic|heif|bmp|tif{1,2})$/i.test(file.name);
+}
+
 export async function blobToShot(blob: Blob, name: string): Promise<PhotoShot> {
-  const source = await decodeBlob(blob);
-  const { width, height } = sourceSize(source);
-  const full = drawFitted(source, width, height, MAX_EDGE);
-  const thumbCanvas = drawFitted(source, width, height, THUMB_EDGE);
-  if ("close" in source && typeof source.close === "function") source.close();
-  return {
-    id: uid(),
-    name: name.replace(/\.[^.]+$/, "") || "Photo",
-    url: toJpeg(full),
-    thumb: toJpeg(thumbCanvas, 0.72),
-    createdAt: Date.now(),
-    aspect: full.width / Math.max(1, full.height),
-  };
+  const { source, objectUrl } = await decodeBlob(blob);
+  try {
+    const { width, height } = sourceSize(source);
+    if (width < 2 || height < 2) {
+      throw new Error("Could not read that photo");
+    }
+    const full = drawFitted(source, width, height, MAX_EDGE);
+    const thumbCanvas = drawFitted(source, width, height, THUMB_EDGE);
+    return {
+      id: uid(),
+      name: name.replace(/\.[^.]+$/, "") || "Photo",
+      url: toJpeg(full),
+      thumb: toJpeg(thumbCanvas, 0.72),
+      createdAt: Date.now(),
+      aspect: full.width / Math.max(1, full.height),
+    };
+  } finally {
+    if ("close" in source && typeof source.close === "function") source.close();
+    if (objectUrl) URL.revokeObjectURL(objectUrl);
+  }
 }
 
 export function fileToShot(file: File) {
