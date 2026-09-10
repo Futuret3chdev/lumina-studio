@@ -1,41 +1,23 @@
-# Lumina
+# MT World House
 
-Cinematic 3D asset studio in the browser. Stage cars, houses, trees, furniture, and props under studio lighting, then export a PNG render or a GLB model for games.
+Selfie as the aviator, dress from the MT World gallery, and drop any 3D model into your empty house.
 
-**Repo:** [github.com/Futuret3chdev/lumina-studio](https://github.com/Futuret3chdev/lumina-studio)
+**GitHub:** [github.com/Futuret3chdev/mt-world](https://github.com/Futuret3chdev/mt-world)
 
 ## Try it
 
-- **Take a photo** or upload one — Lumina sculpts it into a 3D relief
-- Toggle **Wrap onto model** to skin a car, house, or prop with that shot
-- Drag to orbit, scroll to zoom
-- Pick an asset from the left rail
-- Tune color, metal, roughness, and shape
-- Switch stage lighting (Studio, Sunset, Night, City…)
-- Export PNG or GLB, or save to the local gallery
+- **Me · Aviator** — front camera, your face on the character, dropped into the house
+- **Dress** — Aviator, Street, Formal, Casual, MT, Gold cape, Token head
+- Gallery looks (Nova, Rex, Mira…) from [MT WORLD — Gallery](https://memetorrent.futuret3ch.com.au/catalog/mt-world-gallery)
+- Tap catalog models or **3D** (GLB / GLTF) to furnish the house, lot, or garden
+- Take a photo to sculpt a 3D relief
 
 ## Deploy on Vercel
 
-[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Futuret3chdev/lumina-studio&project-name=futuret3ch-lumina&repository-name=lumina-studio)
+[![Deploy with Vercel](https://vercel.com/button)](https://vercel.com/new/clone?repository-url=https://github.com/Futuret3chdev/mt-world&project-name=mt-world&repository-name=mt-world)
 
-Or: Vercel dashboard → **Add New** → **Project** → import `Futuret3chdev/lumina-studio` as a **new** project (do not attach it to an existing one).
-
-If the repo does not appear in the import list, open [Vercel GitHub App permissions](https://github.com/settings/installations) and grant access to `lumina-studio`.
-
-## Local
-
-```bash
-npm install
-npm run dev
-```
-
-```bash
-npm run build
-npm run typecheck
-```
+Import `Futuret3chdev/mt-world` as a **new** Vercel project. If it does not appear, grant the Vercel GitHub App access to `mt-world`.
 
 ## Stack
 
 React 19, TanStack Start, Three.js, React Three Fiber, Tailwind v4.
-
-Auth and database are off. Gallery state lives in `localStorage`.
