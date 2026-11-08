@@ -1,5 +1,5 @@
-/** Live MT World gallery — dress looks hosted on the MT stack. */
-export const MT_WORLD_ORIGIN = "https://memetorrent.futuret3ch.com.au";
+/** Live T3x World gallery — dress looks hosted on the MT stack. */
+export const MT_WORLD_ORIGIN = "https://futuret3ch.futuret3ch.com.au";
 
 export const CAST_LOOKS: { id: string; name: string }[] = [
   { id: "nova", name: "Nova" },

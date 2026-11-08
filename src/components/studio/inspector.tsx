@@ -216,7 +216,7 @@ export function Inspector() {
               ? picture
                 ? "This picture"
                 : selected.name
-              : "MT World"
+              : "T3x World"
             : item.name}
         </p>
         <p className="mt-1 text-sm text-muted">
