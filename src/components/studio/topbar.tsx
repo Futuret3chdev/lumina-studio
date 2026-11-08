@@ -80,7 +80,7 @@ export function Topbar() {
             Lumina
           </p>
           <p className="text-xs text-muted">
-            {mode === "world" ? `MT World · ${scene?.label ?? "House"}` : item.name}
+            {mode === "world" ? `T3x World · ${scene?.label ?? "House"}` : item.name}
           </p>
         </div>
       </div>
@@ -128,7 +128,7 @@ export function Topbar() {
           variant="ghost"
           size="icon-sm"
           className={cn("md:hidden", mode === "world" && "text-fg")}
-          aria-label={mode === "world" ? "Back to studio" : "Open MT World"}
+          aria-label={mode === "world" ? "Back to studio" : "Open T3x World"}
           onClick={() => setMode(mode === "world" ? "studio" : "world")}
         >
           <Globe className="size-4" />

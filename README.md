@@ -1,6 +1,6 @@
-# MT World House
+# T3x World House
 
-Selfie as the aviator, dress from the MT World gallery, and drop any 3D model into your empty house.
+Selfie as the aviator, dress from the T3x World gallery, and drop any 3D model into your empty house.
 
 **GitHub:** [github.com/Futuret3chdev/mt-world](https://github.com/Futuret3chdev/mt-world)
 
@@ -8,7 +8,7 @@ Selfie as the aviator, dress from the MT World gallery, and drop any 3D model in
 
 - **Me · Aviator** — front camera, your face on the character, dropped into the house
 - **Dress** — Aviator, Street, Formal, Casual, MT, Gold cape, Token head
-- Gallery looks (Nova, Rex, Mira…) from [MT WORLD — Gallery](https://memetorrent.futuret3ch.com.au/catalog/mt-world-gallery)
+- Gallery looks (Nova, Rex, Mira…) from [T3x WORLD — Gallery](https://futuret3ch.futuret3ch.com.au/catalog/mt-world-gallery)
 - Tap catalog models or **3D** (GLB / GLTF) to furnish the house, lot, or garden
 - Take a photo to sculpt a 3D relief
 

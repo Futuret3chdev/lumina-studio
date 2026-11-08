@@ -424,7 +424,7 @@ export const CATALOG: CatalogItem[] = [
     id: "avatar",
     name: "Aviator",
     category: "people",
-    blurb: "You, in 3D. Photo face, MT World dress, then drop into your house.",
+    blurb: "You, in 3D. Photo face, T3x World dress, then drop into your house.",
     defaults: { height: 1, build: 1, dress: 0 },
     params: [
       shape("height", "Height", 0.85, 1.25),

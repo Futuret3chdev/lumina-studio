@@ -187,7 +187,7 @@ export function CatalogRail() {
         {category === "people" && (
           <div className="mt-3">
             <p className="px-2 pb-2 text-xs font-medium uppercase tracking-wider text-subtle">
-              MT World looks
+              T3x World looks
             </p>
             <div className="grid grid-cols-3 gap-1.5 px-1 pb-2">
               {CAST_LOOKS.map((look) => (
